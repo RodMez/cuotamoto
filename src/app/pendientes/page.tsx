@@ -6,6 +6,8 @@ import { getLedger } from "@/server/db/ledger";
 import { fmtCOP } from "@/lib/utils";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function Pendientes() {
   const s = await auth();

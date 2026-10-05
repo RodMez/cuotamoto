@@ -7,6 +7,8 @@ import { getLedger } from "@/server/db/ledger";
 import { fmtCOP } from "@/lib/utils";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function MiCuenta() {
   const s = await auth();
