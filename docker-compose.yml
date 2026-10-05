@@ -9,14 +9,18 @@ services:
       AUTH_URL: ${AUTH_URL}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@cuotamoto.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      TZ: America/Bogota
     volumes:
       - cuotamoto-data:/app/data
     restart: unless-stopped
+    deploy:
+      replicas: 1
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 60s
 
 volumes:
   cuotamoto-data:

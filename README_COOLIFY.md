@@ -14,18 +14,19 @@ git push -u origin main
 
 ## 2. Coolify
 1. New Resource → Application → Public/Private Repo → rama `main`
-2. Build: Dockerfile (puerto 3000). Healthcheck: `/api/health`
+2. Build: Dockerfile (puerto 3000). Healthcheck HTTP `GET :3000/api/health`, intervalo 30s, timeout 5s, reintentos 3, **start period 60s** (sin esto Coolify lo mata antes de calentar).
 3. Domains → `https://tudominio.com` → SSL auto
-4. Volumes: `cuotamoto-data:/app/data` — **replicas = 1** (SQLite no escala)
-5. Env:
+4. Storages: volumen persistente en `/app/data` — **replicas = 1** (SQLite no escala)
+5. Env (solo runtime, nunca Build Args):
 ```
 DATABASE_URL=file:/app/data/prod.db
 AUTH_SECRET=<32+ chars random>
 AUTH_URL=https://tudominio.com
 ADMIN_EMAIL=admin@cuotamoto.local
 ADMIN_PASSWORD=<cámbiala>
+TZ=America/Bogota
 ```
-6. Deploy. El seed crea admin + moto demo PMO-001 con días 89/90 como tu imagen.
+6. Deploy **sin caché** tras cambiar el Dockerfile. El entrypoint (`tini` + `docker-entrypoint.sh`) valida env, corre `scripts/migrate.mjs` (crea tablas + admin si `users` vacía) y arranca `server.js`. Moto demo PMO-001 días 89/90 solo en seed local.
 
 ## 3. Uso
 - `/login` → admin entra con email, conductor con teléfono.
