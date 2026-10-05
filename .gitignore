@@ -35,7 +35,7 @@ yarn-error.log*
 !.env.example
 
 # sqlite local (Coolify usa volumen)
- /data/
+/data/
 
 # vercel
 .vercel
