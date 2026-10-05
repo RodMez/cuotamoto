@@ -37,24 +37,42 @@ export const contracts = sqliteTable("contracts", {
   clientId: text("client_id").notNull(),
   fechaInicio: text("fecha_inicio").notNull(), // YYYY-MM-DD
   activo: integer("activo").notNull().default(1),
+  saldoInicial: integer("saldo_inicial").notNull().default(0), // COP: deuda anterior al contrato
+  omitirDomingos: integer("omitir_domingos").notNull().default(0), // 1 = domingos exentos
   createdAt: text("created_at").notNull(),
 });
 
 // Un día de cuota. cuotaDia puede variar respecto a cuotaBase.
+// exento=1 (cuota 0): domingo omitido o día específico (taller, etc.)
 export const ledgerDays = sqliteTable(
   "ledger_days",
   {
     id: text("id").primaryKey(),
     contractId: text("contract_id").notNull(),
-    diaSeq: integer("dia_seq").notNull(), // 1,2,3...89,90
+    diaSeq: integer("dia_seq").notNull(), // consecutivo de creación
     fecha: text("fecha").notNull(), // YYYY-MM-DD
     cuotaDia: integer("cuota_dia").notNull(),
+    exento: integer("exento").notNull().default(0),
+    motivo: text("motivo"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [
     uniqueIndex("uq_day_contract_seq").on(t.contractId, t.diaSeq),
     uniqueIndex("uq_day_contract_fecha").on(t.contractId, t.fecha),
   ],
+);
+
+// Días a omitir (taller, mantenimiento, etc.): el día se genera con cuota 0.
+export const omisiones = sqliteTable(
+  "omisiones",
+  {
+    id: text("id").primaryKey(),
+    contractId: text("contract_id").notNull(),
+    fecha: text("fecha").notNull(), // YYYY-MM-DD
+    motivo: text("motivo"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("uq_omision_contract_fecha").on(t.contractId, t.fecha)],
 );
 
 // N pagos por día

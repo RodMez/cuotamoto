@@ -26,7 +26,7 @@ export default async function MiCuenta() {
   if (!ct) return <div className="p-8">Sin contrato activo.</div>;
   const ledger = await getLedger(ct.id);
   const last = ledger[ledger.length - 1];
-  const deuda = last?.deudaAcumulada ?? 0;
+  const deuda = last?.deudaAcumulada ?? ct.saldoInicial ?? 0;
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4 w-full">

@@ -1,14 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
-import { fmtCOP, todayISO } from "@/lib/utils";
+import { fmtCOP, hoyBogota } from "@/lib/utils";
 
 type Veh = { id: string; placa: string; alias: string | null; cuotaBase: number };
-type Ct = { id: string; vehicleId: string; clientId: string; fechaInicio: string };
+type Ct = { id: string; vehicleId: string; clientId: string; fechaInicio: string; saldoInicial: number; omitirDomingos: number };
 type Cli = { id: string; nombre: string; telefono: string };
+type Pago = { id: string; monto: number; metodo: string; nota: string | null };
 type Row = {
-  diaSeq: number; fecha: string; cuotaDia: number; totalPagado: number;
-  deudaAcumulada: number; estado: string;
-  pagos: { id: string; monto: number; metodo: string; nota: string | null }[];
+  diaSeq: number; fecha: string; cuotaDia: number; exento: boolean; motivo: string | null;
+  totalPagado: number; deudaAcumulada: number; estado: string; pagos: Pago[];
 };
 
 export default function DashboardClient() {
@@ -17,10 +17,13 @@ export default function DashboardClient() {
   const [clis, setClis] = useState<Cli[]>([]);
   const [contractId, setContractId] = useState("");
   const [ledger, setLedger] = useState<Row[]>([]);
-  const [fecha, setFecha] = useState(todayISO());
+  const [fecha, setFecha] = useState(hoyBogota());
   const [cuota, setCuota] = useState("17000");
+  // Modal pago
+  const [modalFecha, setModalFecha] = useState<string | null>(null);
   const [monto, setMonto] = useState("");
   const [metodo, setMetodo] = useState("efectivo");
+  const [nota, setNota] = useState("");
 
   async function loadBase() {
     const r = await fetch("/api/vehicles");
@@ -34,11 +37,11 @@ export default function DashboardClient() {
     if (!id) return;
     const r = await fetch(`/api/ledger?contractId=${id}`);
     const j = await r.json();
-    setLedger((j.ledger ?? []).slice().reverse()); // 90 arriba como Notion
+    setLedger((j.ledger ?? []).slice().reverse()); // más reciente arriba como Notion
   }
   useEffect(() => { loadBase(); }, []);
   useEffect(() => { loadLedger(contractId); }, [contractId]);
-  // Precarga cuota del día con la base de la moto seleccionada
+  // Precarga cuota con la base de la moto seleccionada
   useEffect(() => {
     const ct = cts.find((c) => c.id === contractId);
     const veh = vehs.find((v) => v.id === ct?.vehicleId);
@@ -46,30 +49,39 @@ export default function DashboardClient() {
   }, [contractId, vehs, cts]);
 
   const last = [...ledger].reverse().pop();
-  const deuda = last?.deudaAcumulada ?? 0;
+  const ct = cts.find((c) => c.id === contractId);
+  const deuda = last?.deudaAcumulada ?? ct?.saldoInicial ?? 0;
   const pend = ledger.filter((x) => x.estado === "Pendiente").length;
-  const mes = todayISO().slice(0, 7);
+  const mes = hoyBogota().slice(0, 7);
   const recaudo = ledger.filter((x) => x.fecha.startsWith(mes)).reduce((a, x) => a + x.totalPagado, 0);
 
-  async function genDia() {
+  async function genDias() {
     const r = await fetch("/api/ledger", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contractId, fecha, cuotaDia: Number(cuota) }),
     });
-    if (!r.ok) alert((await r.json()).error);
-    else { setFecha(todayISO()); loadLedger(contractId); }
+    const j = await r.json();
+    if (!r.ok) alert(j.error);
+    else { setFecha(hoyBogota()); loadLedger(contractId); }
   }
-  async function addPago(fechaPago: string) {
+  async function registrarPago() {
+    if (!modalFecha) return;
     if (!monto) return alert("monto requerido");
     const r = await fetch("/api/payments", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contractId, fecha: fechaPago, monto: Number(monto), metodo }),
+      body: JSON.stringify({ contractId, fecha: modalFecha, monto: Number(monto), metodo, nota: nota || undefined }),
     });
+    const j = await r.json();
+    if (!r.ok) alert(j.error);
+    else { setMonto(""); setNota(""); setModalFecha(null); loadLedger(contractId); }
+  }
+  async function borrarPago(id: string) {
+    if (!confirm("¿Borrar este pago? (solo admin)")) return;
+    const r = await fetch(`/api/payments?id=${id}`, { method: "DELETE" });
     if (!r.ok) alert((await r.json()).error);
-    else { setMonto(""); loadLedger(contractId); }
+    else loadLedger(contractId);
   }
 
-  const ct = cts.find((c) => c.id === contractId);
   const veh = vehs.find((v) => v.id === ct?.vehicleId);
   const cli = clis.find((c) => c.id === ct?.clientId);
 
@@ -91,7 +103,10 @@ export default function DashboardClient() {
       <header className="flex flex-wrap items-center gap-3 justify-between">
         <div>
           <h1 className="text-2xl font-bold">Pagos — CuotaMoto</h1>
-          <p className="text-sm text-slate-300">{veh ? `${veh.placa} · ${cli?.nombre ?? ""} · base ${fmtCOP(veh.cuotaBase)}` : "sin contratos"}</p>
+          <p className="text-sm text-slate-300">
+            {veh ? `${veh.placa} · ${cli?.nombre ?? ""} · base ${fmtCOP(veh.cuotaBase)}` : "sin contratos"}
+            {(ct?.saldoInicial ?? 0) > 0 && ` · saldo inicial ${fmtCOP(ct!.saldoInicial)}`}
+          </p>
         </div>
         <nav className="flex gap-2 text-sm">
           <a className="btn btn-ghost" href="/pendientes">Pendientes</a>
@@ -120,49 +135,70 @@ export default function DashboardClient() {
       </div>
 
       <div className="card p-4 flex flex-wrap gap-2 items-end">
-        <div><label className="text-xs">Fecha nuevo día</label><input className="input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
-        <div><label className="text-xs">Cuota día (variable)</label><input className="input font-mono-num" value={cuota} onChange={(e) => setCuota(e.target.value)} /></div>
-        <button className="btn btn-accent" onClick={genDia}>+ Generar día</button>
-        <div className="flex gap-2 items-end ml-auto">
-          <div><label className="text-xs">Monto pago</label><input className="input font-mono-num" placeholder="93000" value={monto} onChange={(e) => setMonto(e.target.value)} /></div>
-          <div><label className="text-xs">Método</label>
-            <select className="input" value={metodo} onChange={(e) => setMetodo(e.target.value)}>
-              <option>efectivo</option><option>nequi</option><option>bancolombia</option><option>daviplata</option>
-            </select>
-          </div>
-        </div>
+        <div><label className="text-xs">Generar días hasta</label><input className="input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
+        <div><label className="text-xs">Cuota (si crea nuevo)</label><input className="input font-mono-num" value={cuota} onChange={(e) => setCuota(e.target.value)} /></div>
+        <button className="btn btn-accent" onClick={genDias}>+ Generar días</button>
+        <p className="text-xs text-slate-400 w-full">Crea los faltantes hasta la fecha (respeta domingos y omisiones). Al registrar un pago el día se crea solo si falta.</p>
       </div>
 
       <div className="card overflow-x-auto">
         {ledger.length === 0 ? (
           <div className="p-6 text-center space-y-2">
             <p className="font-bold">Contrato sin días</p>
-            <p className="text-sm text-slate-300">Genera el día 1 abajo con la cuota de la moto y luego registra pagos.</p>
+            <p className="text-sm text-slate-300">Genera los días arriba o registra el primer pago.</p>
           </div>
         ) : (
         <table className="dense w-full min-w-[760px]">
-          <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th>Pago (SUM, N pagos)</th><th>Deuda</th><th>Estado</th><th>Acción</th></tr></thead>
+          <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th>Pagos del día</th><th>Deuda</th><th>Estado</th><th></th></tr></thead>
           <tbody>
             {ledger.map((r) => (
-              <tr key={r.diaSeq}>
+              <tr key={r.fecha} className={r.exento ? "opacity-70" : ""}>
                 <td className="font-mono-num font-bold">{r.diaSeq}</td>
-                <td>{r.fecha}</td>
-                <td className="font-mono-num">{fmtCOP(r.cuotaDia)}</td>
+                <td>{r.fecha}{r.exento && <div className="text-xs text-slate-400">Exento{r.motivo ? ` — ${r.motivo}` : ""}</div>}</td>
+                <td className="font-mono-num">{r.exento ? "0" : fmtCOP(r.cuotaDia)}</td>
                 <td className="font-mono-num">
                   {fmtCOP(r.totalPagado)}
-                  {r.pagos.length > 1 && <span className="text-xs text-sky-300"> ({r.pagos.length} pagos)</span>}
-                  {r.pagos.length > 0 && <div className="text-xs text-slate-400">{r.pagos.map((p) => `${fmtCOP(p.monto)} ${p.metodo}`).join(" · ")}</div>}
+                  {r.pagos.length > 1 && <span className="text-xs text-sky-300"> ({r.pagos.length})</span>}
+                  {r.pagos.length > 0 && (
+                    <div className="text-xs text-slate-400 space-y-1 mt-1">
+                      {r.pagos.map((p) => (
+                        <div key={p.id} className="flex gap-2 items-center">
+                          <span>{fmtCOP(p.monto)} {p.metodo}{p.nota ? ` · ${p.nota}` : ""}</span>
+                          <button className="text-red-300 hover:text-red-200" title="Borrar pago (admin)" onClick={() => borrarPago(p.id)}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td className="font-mono-num font-bold">{fmtCOP(r.deudaAcumulada)}</td>
                 <td><span className={`badge ${r.estado === "Al día" ? "badge-ok" : "badge-pend"}`}>{r.estado === "Al día" ? "✓ Al día" : "● Pendiente"}</span></td>
-                <td><button className="btn btn-ghost text-xs" onClick={() => addPago(r.fecha)}>+ pago aquí</button></td>
+                <td><button className="btn btn-ghost text-xs" onClick={() => { setModalFecha(r.fecha); setMonto(""); }}>Abonar</button></td>
               </tr>
             ))}
           </tbody>
         </table>
         )}
       </div>
-      <p className="text-xs text-slate-400">Deuda(n) = Deuda(n-1) + cuotaDía − SUM(pagos día). La cuota puede variar por moto y por día.</p>
+      <p className="text-xs text-slate-400">Deuda = max(0, anterior + cuota − pagos), arranca en saldo inicial. Cada pago queda fechado el día que se hizo.</p>
+
+      {modalFecha && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" onClick={() => setModalFecha(null)}>
+          <div className="card p-6 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-bold text-lg">Registrar pago — {modalFecha}</h2>
+            <div><label className="text-xs">Monto COP</label><input className="input font-mono-num" placeholder="17000" value={monto} onChange={(e) => setMonto(e.target.value)} /></div>
+            <div><label className="text-xs">Método</label>
+              <select className="input" value={metodo} onChange={(e) => setMetodo(e.target.value)}>
+                <option>efectivo</option><option>nequi</option><option>bancolombia</option><option>daviplata</option>
+              </select>
+            </div>
+            <div><label className="text-xs">Nota (opcional)</label><input className="input" placeholder="..." value={nota} onChange={(e) => setNota(e.target.value)} /></div>
+            <div className="flex gap-2">
+              <button className="btn btn-accent flex-1" onClick={registrarPago}>Guardar pago</button>
+              <button className="btn btn-ghost" onClick={() => setModalFecha(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

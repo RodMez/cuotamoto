@@ -27,12 +27,28 @@ try {
   CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, telefono TEXT UNIQUE, password_hash TEXT NOT NULL, rol TEXT NOT NULL DEFAULT 'viewer', created_at TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS vehicles (id TEXT PRIMARY KEY, placa TEXT NOT NULL UNIQUE, alias TEXT, cuota_base INTEGER NOT NULL, activa INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nombre TEXT NOT NULL, telefono TEXT NOT NULL UNIQUE, documento TEXT, user_id TEXT, created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS contracts (id TEXT PRIMARY KEY, vehicle_id TEXT NOT NULL, client_id TEXT NOT NULL, fecha_inicio TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS ledger_days (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, dia_seq INTEGER NOT NULL, fecha TEXT NOT NULL, cuota_dia INTEGER NOT NULL, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS contracts (id TEXT PRIMARY KEY, vehicle_id TEXT NOT NULL, client_id TEXT NOT NULL, fecha_inicio TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 1, saldo_inicial INTEGER NOT NULL DEFAULT 0, omitir_domingos INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS ledger_days (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, dia_seq INTEGER NOT NULL, fecha TEXT NOT NULL, cuota_dia INTEGER NOT NULL, exento INTEGER NOT NULL DEFAULT 0, motivo TEXT, created_at TEXT NOT NULL);
   CREATE UNIQUE INDEX IF NOT EXISTS uq_day_contract_seq ON ledger_days (contract_id, dia_seq);
   CREATE UNIQUE INDEX IF NOT EXISTS uq_day_contract_fecha ON ledger_days (contract_id, fecha);
   CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, fecha TEXT NOT NULL, monto INTEGER NOT NULL, metodo TEXT NOT NULL DEFAULT 'efectivo', nota TEXT, created_by TEXT, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS omisiones (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, fecha TEXT NOT NULL, motivo TEXT, created_at TEXT NOT NULL);
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_omision_contract_fecha ON omisiones (contract_id, fecha);
   `);
+
+  // Columnas nuevas en DBs ya existentes (SQLite sin ADD COLUMN IF NOT EXISTS)
+  for (const sql of [
+    "ALTER TABLE contracts ADD COLUMN saldo_inicial INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE contracts ADD COLUMN omitir_domingos INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE ledger_days ADD COLUMN exento INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE ledger_days ADD COLUMN motivo TEXT",
+  ]) {
+    try {
+      sqlite.exec(sql);
+    } catch {
+      // ya existe
+    }
+  }
 
   const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
   const now = () => new Date().toISOString();

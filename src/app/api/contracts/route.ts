@@ -40,8 +40,43 @@ export async function POST(req: Request) {
     clientId,
     fechaInicio,
     activo: 1,
+    saldoInicial:
+      b.saldoInicial !== undefined ? Number(b.saldoInicial) : 0,
+    omitirDomingos: Number(b.omitirDomingos) === 1 ? 1 : 0,
     createdAt: nowISO(),
   };
+  if (!Number.isInteger(row.saldoInicial) || row.saldoInicial < 0)
+    return Response.json({ error: "saldoInicial inválido (entero ≥ 0)" }, { status: 400 });
   await db.insert(contracts).values(row);
   return Response.json({ ok: true, contract: row });
+}
+
+// PATCH /api/contracts {contractId, saldoInicial?, omitirDomingos?} (solo admin)
+// La deuda se recalcula sola porque es derivada.
+export async function PATCH(req: Request) {
+  const s = await auth();
+  if ((s?.user as unknown as { rol?: string })?.rol !== "admin")
+    return Response.json({ error: "solo admin" }, { status: 403 });
+  const b = await req.json();
+  const contractId = String(b.contractId ?? "");
+  if (!contractId) return Response.json({ error: "contractId requerido" }, { status: 400 });
+
+  const patch: { saldoInicial?: number; omitirDomingos?: number } = {};
+  if (b.saldoInicial !== undefined) {
+    const v = Number(b.saldoInicial);
+    if (!Number.isInteger(v) || v < 0)
+      return Response.json({ error: "saldoInicial inválido (entero ≥ 0)" }, { status: 400 });
+    patch.saldoInicial = v;
+  }
+  if (b.omitirDomingos !== undefined) {
+    const v = Number(b.omitirDomingos);
+    if (v !== 0 && v !== 1)
+      return Response.json({ error: "omitirDomingos debe ser 0 o 1" }, { status: 400 });
+    patch.omitirDomingos = v;
+  }
+  if (Object.keys(patch).length === 0)
+    return Response.json({ error: "nada que actualizar" }, { status: 400 });
+
+  await db.update(contracts).set(patch).where(eq(contracts.id, contractId));
+  return Response.json({ ok: true });
 }
