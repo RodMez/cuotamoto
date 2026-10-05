@@ -2,15 +2,15 @@ import { auth } from "@/auth";
 import { db } from "@/server/db";
 import { payments, contracts } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
-import { uid, nowISO, hoyBogota, esFechaValida } from "@/lib/utils";
+import { uid, nowISO, hoyBogota } from "@/lib/utils";
 import { ensureDays } from "@/server/db/ensure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST /api/payments {contractId, fecha, monto, metodo?, nota?}
-// Invariante: ningún pago sin día. Si el día no existe, se genera
-// (faltantes hasta esa fecha, exentos incluidos) en la misma operación.
+// POST /api/payments {contractId, monto, metodo?, nota?}
+// Regla: el pago es SIEMPRE hoy (America/Bogota), sin excepciones.
+// La fecha del body se ignora. Si el día no existe, se genera en la misma operación.
 export async function POST(req: Request) {
   const s = await auth();
   const rol = (s?.user as unknown as { rol?: string } | undefined)?.rol as string;
@@ -19,18 +19,14 @@ export async function POST(req: Request) {
   const b = await req.json();
   const monto = Number(b.monto);
   const contractId = String(b.contractId ?? "");
-  const fecha = String(b.fecha ?? "");
-  if (!contractId || !fecha || !Number.isInteger(monto) || monto <= 0)
-    return Response.json({ error: "contractId, fecha y monto>0" }, { status: 400 });
-  if (!esFechaValida(fecha))
-    return Response.json({ error: "fecha inválida (YYYY-MM-DD)" }, { status: 400 });
+  const fecha = hoyBogota();
+  if (!contractId || !Number.isInteger(monto) || monto <= 0)
+    return Response.json({ error: "contractId y monto>0" }, { status: 400 });
 
   const ct = await db.select().from(contracts).where(eq(contracts.id, contractId));
   if (!ct[0]) return Response.json({ error: "contrato no existe" }, { status: 404 });
   if (fecha < ct[0].fechaInicio)
-    return Response.json({ error: "fecha anterior al inicio del contrato" }, { status: 400 });
-  if (rol === "cobrador" && fecha > hoyBogota())
-    return Response.json({ error: "fecha futura no permitida" }, { status: 400 });
+    return Response.json({ error: "el contrato aún no inicia" }, { status: 400 });
 
   // Genera el día (y faltantes) si no existe. Mismo invariante que el cron.
   try {

@@ -19,11 +19,12 @@ export default function DashboardClient() {
   const [ledger, setLedger] = useState<Row[]>([]);
   const [fecha, setFecha] = useState(hoyBogota());
   const [cuota, setCuota] = useState("17000");
-  // Modal pago
-  const [modalFecha, setModalFecha] = useState<string | null>(null);
+  // Modal pago (siempre hoy Bogotá)
+  const [modalAbierto, setModalAbierto] = useState(false);
   const [monto, setMonto] = useState("");
   const [metodo, setMetodo] = useState("efectivo");
   const [nota, setNota] = useState("");
+  const hoy = hoyBogota();
 
   async function loadBase() {
     const r = await fetch("/api/vehicles");
@@ -65,15 +66,14 @@ export default function DashboardClient() {
     else { setFecha(hoyBogota()); loadLedger(contractId); }
   }
   async function registrarPago() {
-    if (!modalFecha) return;
     if (!monto) return alert("monto requerido");
     const r = await fetch("/api/payments", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contractId, fecha: modalFecha, monto: Number(monto), metodo, nota: nota || undefined }),
+      body: JSON.stringify({ contractId, monto: Number(monto), metodo, nota: nota || undefined }),
     });
     const j = await r.json();
     if (!r.ok) alert(j.error);
-    else { setMonto(""); setNota(""); setModalFecha(null); loadLedger(contractId); }
+    else { setMonto(""); setNota(""); setModalAbierto(false); loadLedger(contractId); }
   }
   async function borrarPago(id: string) {
     if (!confirm("¿Borrar este pago? (solo admin)")) return;
@@ -106,6 +106,7 @@ export default function DashboardClient() {
           <p className="text-sm text-slate-300">
             {veh ? `${veh.placa} · ${cli?.nombre ?? ""} · base ${fmtCOP(veh.cuotaBase)}` : "sin contratos"}
             {(ct?.saldoInicial ?? 0) > 0 && ` · saldo inicial ${fmtCOP(ct!.saldoInicial)}`}
+            {ct ? ` · desde ${ct.fechaInicio}` : ""}
           </p>
         </div>
         <nav className="flex gap-2 text-sm">
@@ -131,7 +132,7 @@ export default function DashboardClient() {
         <div className="card p-4"><p className="text-xs text-slate-400">DEUDA TOTAL</p><p className="font-mono-num text-xl font-bold">{fmtCOP(deuda)}</p></div>
         <div className="card p-4"><p className="text-xs text-slate-400">DÍAS PENDIENTES</p><p className="font-mono-num text-xl font-bold">{pend}/{ledger.length}</p></div>
         <div className="card p-4"><p className="text-xs text-slate-400">RECAUDO {mes}</p><p className="font-mono-num text-xl font-bold">{fmtCOP(recaudo)}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-400">CONTRATO</p><p className="text-sm">{ct?.fechaInicio ?? "-"}</p></div>
+        <button className="btn btn-accent text-lg font-bold" onClick={() => { setMonto(""); setModalAbierto(true); }}>+ Abonar hoy</button>
       </div>
 
       <div className="card p-4 flex flex-wrap gap-2 items-end">
@@ -149,7 +150,7 @@ export default function DashboardClient() {
           </div>
         ) : (
         <table className="dense w-full min-w-[760px]">
-          <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th>Pagos del día</th><th>Deuda</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th>Pagos del día</th><th>Deuda</th><th>Estado</th></tr></thead>
           <tbody>
             {ledger.map((r) => (
               <tr key={r.fecha} className={r.exento ? "opacity-70" : ""}>
@@ -172,19 +173,19 @@ export default function DashboardClient() {
                 </td>
                 <td className="font-mono-num font-bold">{fmtCOP(r.deudaAcumulada)}</td>
                 <td><span className={`badge ${r.estado === "Al día" ? "badge-ok" : "badge-pend"}`}>{r.estado === "Al día" ? "✓ Al día" : "● Pendiente"}</span></td>
-                <td><button className="btn btn-ghost text-xs" onClick={() => { setModalFecha(r.fecha); setMonto(""); }}>Abonar</button></td>
               </tr>
             ))}
           </tbody>
         </table>
         )}
       </div>
-      <p className="text-xs text-slate-400">Deuda = max(0, anterior + cuota − pagos), arranca en saldo inicial. Cada pago queda fechado el día que se hizo.</p>
+      <p className="text-xs text-slate-400">Deuda = max(0, anterior + cuota − pagos), arranca en saldo inicial. Todo pago se aplica al día de hoy.</p>
 
-      {modalFecha && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" onClick={() => setModalFecha(null)}>
+      {modalAbierto && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" onClick={() => setModalAbierto(false)}>
           <div className="card p-6 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-bold text-lg">Registrar pago — {modalFecha}</h2>
+            <h2 className="font-bold text-lg">Abonar hoy — {hoy}</h2>
+            <p className="text-xs text-slate-400">Se aplica al día de hoy ({hoy}).</p>
             <div><label className="text-xs">Monto COP</label><input className="input font-mono-num" placeholder="17000" value={monto} onChange={(e) => setMonto(e.target.value)} /></div>
             <div><label className="text-xs">Método</label>
               <select className="input" value={metodo} onChange={(e) => setMetodo(e.target.value)}>
@@ -194,7 +195,7 @@ export default function DashboardClient() {
             <div><label className="text-xs">Nota (opcional)</label><input className="input" placeholder="..." value={nota} onChange={(e) => setNota(e.target.value)} /></div>
             <div className="flex gap-2">
               <button className="btn btn-accent flex-1" onClick={registrarPago}>Guardar pago</button>
-              <button className="btn btn-ghost" onClick={() => setModalFecha(null)}>Cerrar</button>
+              <button className="btn btn-ghost" onClick={() => setModalAbierto(false)}>Cerrar</button>
             </div>
           </div>
         </div>
