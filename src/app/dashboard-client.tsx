@@ -38,6 +38,12 @@ export default function DashboardClient() {
   }
   useEffect(() => { loadBase(); }, []);
   useEffect(() => { loadLedger(contractId); }, [contractId]);
+  // Precarga cuota del día con la base de la moto seleccionada
+  useEffect(() => {
+    const ct = cts.find((c) => c.id === contractId);
+    const veh = vehs.find((v) => v.id === ct?.vehicleId);
+    if (veh) setCuota(String(veh.cuotaBase));
+  }, [contractId, vehs, cts]);
 
   const last = [...ledger].reverse().pop();
   const deuda = last?.deudaAcumulada ?? 0;
@@ -66,6 +72,19 @@ export default function DashboardClient() {
   const ct = cts.find((c) => c.id === contractId);
   const veh = vehs.find((v) => v.id === ct?.vehicleId);
   const cli = clis.find((c) => c.id === ct?.clientId);
+
+  if (cts.length === 0) {
+    return (
+      <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4 w-full">
+        <h1 className="text-2xl font-bold">Pagos — CuotaMoto</h1>
+        <div className="card p-6 text-center space-y-3">
+          <p className="font-bold">Aún no hay contratos</p>
+          <p className="text-sm text-slate-300">Paso 1: crea una moto · Paso 2: crea el cliente · Paso 3: crea el contrato.</p>
+          <a className="btn btn-primary inline-block" href="/admin">Ir a /admin</a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-4 w-full">
@@ -115,6 +134,12 @@ export default function DashboardClient() {
       </div>
 
       <div className="card overflow-x-auto">
+        {ledger.length === 0 ? (
+          <div className="p-6 text-center space-y-2">
+            <p className="font-bold">Contrato sin días</p>
+            <p className="text-sm text-slate-300">Genera el día 1 abajo con la cuota de la moto y luego registra pagos.</p>
+          </div>
+        ) : (
         <table className="dense w-full min-w-[760px]">
           <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th>Pago (SUM, N pagos)</th><th>Deuda</th><th>Estado</th><th>Acción</th></tr></thead>
           <tbody>
@@ -135,6 +160,7 @@ export default function DashboardClient() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
       <p className="text-xs text-slate-400">Deuda(n) = Deuda(n-1) + cuotaDía − SUM(pagos día). La cuota puede variar por moto y por día.</p>
     </div>

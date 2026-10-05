@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/server/db";
-import { payments } from "@/server/db/schema";
+import { payments, contracts } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import { uid, nowISO } from "@/lib/utils";
 
@@ -14,8 +14,15 @@ export async function POST(req: Request) {
     return Response.json({ error: "sin permiso" }, { status: 403 });
   const b = await req.json();
   const monto = Number(b.monto);
-  if (!b.contractId || !b.fecha || !Number.isInteger(monto) || monto <= 0)
+  const fecha = String(b.fecha ?? "");
+  if (!b.contractId || !fecha || !Number.isInteger(monto) || monto <= 0)
     return Response.json({ error: "contractId, fecha y monto>0" }, { status: 400 });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || Number.isNaN(Date.parse(fecha)))
+    return Response.json({ error: "fecha inválida (YYYY-MM-DD)" }, { status: 400 });
+  const ct = await db.select().from(contracts).where(eq(contracts.id, String(b.contractId)));
+  if (!ct[0]) return Response.json({ error: "contrato no existe" }, { status: 404 });
+  if (fecha < ct[0].fechaInicio)
+    return Response.json({ error: "fecha anterior al inicio del contrato" }, { status: 400 });
   const row = {
     id: uid(),
     contractId: String(b.contractId),

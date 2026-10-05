@@ -39,6 +39,13 @@ export async function POST(req: Request) {
   const fecha = String(b.fecha ?? ""); // YYYY-MM-DD
   let cuotaDia = b.cuotaDia !== undefined ? Number(b.cuotaDia) : undefined;
   if (!contractId || !fecha) return Response.json({ error: "contractId y fecha" }, { status: 400 });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || Number.isNaN(Date.parse(fecha)))
+    return Response.json({ error: "fecha inválida (YYYY-MM-DD)" }, { status: 400 });
+
+  const ct = await db.select().from(contracts).where(eq(contracts.id, contractId));
+  if (!ct[0]) return Response.json({ error: "contrato no existe" }, { status: 404 });
+  if (fecha < ct[0].fechaInicio)
+    return Response.json({ error: "fecha anterior al inicio del contrato" }, { status: 400 });
 
   const days = await db.select().from(ledgerDays).where(eq(ledgerDays.contractId, contractId));
   const maxSeq = days.reduce((m, d) => Math.max(m, d.diaSeq), 0);
