@@ -23,8 +23,26 @@ async function fetchJSON(url: string, init?: RequestInit) {
   return j;
 }
 
+// Cache fuera del render: cuando React descarta un render suspendido,
+// el useMemo se pierde con él y cada reintento crearía un fetch nuevo
+// (loop infinito). El Map sobrevive y la promesa resuelta se reutiliza.
+const promiseCache = new Map<string, Promise<unknown>>();
+
 function useJSON<T>(url: string): T {
-  return use(useMemo(() => fetchJSON(url) as Promise<T>, [url]));
+  let p = promiseCache.get(url);
+  if (!p) {
+    p = fetchJSON(url);
+    promiseCache.set(url, p);
+    p.catch(() => {
+      if (promiseCache.get(url) === p) promiseCache.delete(url);
+    });
+  }
+  return use(p as Promise<T>);
+}
+
+/** Invalida una URL cacheada (llamar antes de remontar tras una mutación). */
+function evictJSON(url: string) {
+  promiseCache.delete(url);
 }
 
 class PanelError extends Component<
@@ -77,6 +95,7 @@ function LedgerPanel({
   onMutated: () => void;
 }) {
   const data = useJSON<{ ledger: Row[] }>(`/api/ledger?contractId=${contractId}`);
+  const ledgerURL = `/api/ledger?contractId=${contractId}`;
   const ledger = useMemo(() => ledgerRecientePrimero(data.ledger ?? []), [data]);
   const [fecha, setFecha] = useState(hoyBogota());
   const [cuota, setCuota] = useState<string | null>(null);
@@ -99,6 +118,7 @@ function LedgerPanel({
         body: JSON.stringify({ contractId, fecha, cuotaDia: Number(cuotaVal) }),
       });
       setFecha(hoyBogota());
+      evictJSON(ledgerURL);
       onMutated();
     } catch (e) {
       alert((e as Error).message);
@@ -117,6 +137,7 @@ function LedgerPanel({
       setMonto("");
       setNota("");
       setModalAbierto(false);
+      evictJSON(ledgerURL);
       onMutated();
     } catch (e) {
       alert((e as Error).message);
@@ -126,6 +147,7 @@ function LedgerPanel({
     if (!confirm("¿Borrar este pago? (solo admin)")) return;
     try {
       await fetchJSON(`/api/payments?id=${id}`, { method: "DELETE" });
+      evictJSON(ledgerURL);
       onMutated();
     } catch (e) {
       alert((e as Error).message);
