@@ -15,6 +15,8 @@ function migrate() {
   CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, fecha TEXT NOT NULL, monto INTEGER NOT NULL, metodo TEXT NOT NULL DEFAULT 'efectivo', nota TEXT, created_by TEXT, created_at TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS omisiones (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, fecha TEXT NOT NULL, motivo TEXT, created_at TEXT NOT NULL);
   CREATE UNIQUE INDEX IF NOT EXISTS uq_omision_contract_fecha ON omisiones (contract_id, fecha);
+  CREATE TABLE IF NOT EXISTS login_attempts (identificador TEXT PRIMARY KEY, intentos INTEGER NOT NULL DEFAULT 0, bloqueado_hasta TEXT, actualizado_en TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS audit_log (id TEXT PRIMARY KEY, ts TEXT NOT NULL, user_id TEXT, accion TEXT NOT NULL, entidad TEXT NOT NULL, entidad_id TEXT, antes TEXT, despues TEXT);
   `);
 }
 

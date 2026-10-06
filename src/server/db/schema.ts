@@ -87,4 +87,24 @@ export const payments = sqliteTable("payments", {
   createdAt: text("created_at").notNull(),
 });
 
+// Intentos de login para rate limit (identificador = email o teléfono normalizado)
+export const loginAttempts = sqliteTable("login_attempts", {
+  identificador: text("identificador").primaryKey(),
+  intentos: integer("intentos").notNull().default(0),
+  bloqueadoHasta: text("bloqueado_hasta"),
+  actualizadoEn: text("actualizado_en").notNull(),
+});
+
+// Trazabilidad: quién cambió qué. Nunca passwordHash ni secretos.
+export const auditLog = sqliteTable("audit_log", {
+  id: text("id").primaryKey(),
+  ts: text("ts").notNull(),
+  userId: text("user_id"),
+  accion: text("accion").notNull(), // crear_pago, borrar_pago, editar_dia, ...
+  entidad: text("entidad").notNull(), // payments, ledger_days, contracts, users
+  entidadId: text("entidad_id"),
+  antes: text("antes"), // JSON
+  despues: text("despues"), // JSON
+});
+
 export type Role = "admin" | "cobrador" | "conductor" | "viewer";

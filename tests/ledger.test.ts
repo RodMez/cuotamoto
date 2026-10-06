@@ -6,8 +6,8 @@ import { getLedger, summarize } from "@/server/db/ledger";
 import { ensureDays } from "@/server/db/ensure";
 import { uid, nowISO } from "@/lib/utils";
 
-// Congelan el COMPORTAMIENTO ACTUAL (pre-crédito derivado).
-// Al implementar saldo a favor se actualiza el caso "tope en 0".
+// Congelan el comportamiento con crédito derivado (saldo corrido).
+// deuda = max(0, saldo), credito = max(0, −saldo). Nada se pierde.
 
 const s = () => Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
 
@@ -101,12 +101,27 @@ describe("getLedger (comportamiento actual)", () => {
     ]);
   });
 
-  it("tope en 0: el sobrepago se pierde (se revisa al implementar crédito)", async () => {
+  it("sobrepago genera saldo a favor (derivado, nada se pierde)", async () => {
     const ct = await fixture({ inicio: "2026-10-05" });
     await ensureDays(ct, "2026-10-05");
     await pay(ct, "2026-10-05", 50000);
     const L = await getLedger(ct);
     expect(L[0].deudaAcumulada).toBe(0);
+    expect(L[0].credito).toBe(33000); // 50000 − 17000
+  });
+
+  it("el crédito cubre días siguientes y sobrevive exentos", async () => {
+    const ct = await fixture({ inicio: "2026-10-03", omitirDomingos: true });
+    await ensureDays(ct, "2026-10-03");
+    await pay(ct, "2026-10-03", 50000); // 17k cuota → 33k crédito
+    await ensureDays(ct, "2026-10-06"); // 04 dom exento, 05 y 06 normales
+    const L = await getLedger(ct);
+    const porFecha = Object.fromEntries(L.map((r) => [r.fecha, r]));
+    expect(porFecha["2026-10-04"].exento).toBe(true);
+    expect(porFecha["2026-10-05"].creditoUsado).toBe(17000);
+    // 03: −33000 · 04 exento conserva · 05: −16000 · 06: −16000+17000 = +1000
+    expect(porFecha["2026-10-06"].deudaAcumulada).toBe(1000);
+    expect(porFecha["2026-10-06"].credito).toBe(0);
   });
 
   it("cambio de mes: recaudo por prefijo", async () => {

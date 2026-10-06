@@ -27,6 +27,7 @@ export default async function MiCuenta() {
   const ledger = await getLedger(ct.id);
   const last = ledger[ledger.length - 1];
   const deuda = last?.deudaAcumulada ?? ct.saldoInicial ?? 0;
+  const credito = last?.credito ?? 0;
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4 w-full">
@@ -34,6 +35,7 @@ export default async function MiCuenta() {
       <div className="card p-6 text-center">
         <p className="text-sm text-slate-300">DEBES HOY</p>
         <p className="font-mono-num text-3xl font-bold">{fmtCOP(deuda)}</p>
+        {credito > 0 && <p className="text-sm text-emerald-300">Tienes {fmtCOP(credito)} a favor</p>}
         <p className={`badge mt-2 ${deuda <= 0 ? "badge-ok" : "badge-pend"}`}>{deuda <= 0 ? "✓ Al día" : "● Pendiente"}</p>
       </div>
       <div className="card p-4">

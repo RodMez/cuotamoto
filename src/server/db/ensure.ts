@@ -3,6 +3,9 @@ import { ledgerDays, contracts, vehicles, omisiones } from "./schema";
 import { eq, and } from "drizzle-orm";
 import { uid, nowISO, esDomingo, esFechaValida } from "@/lib/utils";
 
+/** Tipo del `tx` de db.transaction (better-sqlite3: síncrono). */
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 const addDays = (fecha: string, n: number) => {
   const d = new Date(fecha + "T12:00:00");
   d.setDate(d.getDate() + n);
@@ -10,32 +13,28 @@ const addDays = (fecha: string, n: number) => {
 };
 
 /**
- * Crea los días faltantes de un contrato desde el último existente
- * (o fechaInicio) hasta `hastaFecha`. Idempotente.
- * Domingos con omitirDomingos y fechas en `omisiones` se crean exentos (cuota 0).
- * Devuelve cuántos creó. Lanza si el contrato no existe o la fecha es inválida.
+ * SÍNCRONA a propósito: drizzle+better-sqlite3 serializa las transacciones
+ * en el proceso, así dos peticiones concurrentes no chocan con el índice único.
+ * El callback de db.transaction no puede ser async ni usar await.
  */
-export async function ensureDays(
+function ensureDaysTx(
+  tx: Tx,
   contractId: string,
   hastaFecha: string,
   cuotaDefault?: number,
-): Promise<number> {
+): number {
   if (!esFechaValida(hastaFecha)) throw new Error("fecha inválida (YYYY-MM-DD)");
-  const cts = await db.select().from(contracts).where(eq(contracts.id, contractId));
-  const ct = cts[0];
+  const ct = tx.select().from(contracts).where(eq(contracts.id, contractId)).get();
   if (!ct) throw new Error("contrato no existe");
   if (hastaFecha < ct.fechaInicio) return 0;
 
-  const days = await db.select().from(ledgerDays).where(eq(ledgerDays.contractId, contractId));
+  const days = tx.select().from(ledgerDays).where(eq(ledgerDays.contractId, contractId)).all();
   const existentes = new Set(days.map((d) => d.fecha));
   const maxSeq = days.reduce((m, d) => Math.max(m, d.diaSeq), 0);
   const maxFecha = days.reduce((m, d) => (d.fecha > m ? d.fecha : m), "");
-  let desde = maxFecha && maxFecha >= ct.fechaInicio ? addDays(maxFecha, 1) : ct.fechaInicio;
+  const desde = maxFecha && maxFecha >= ct.fechaInicio ? addDays(maxFecha, 1) : ct.fechaInicio;
 
-  const omis = await db
-    .select()
-    .from(omisiones)
-    .where(eq(omisiones.contractId, contractId));
+  const omis = tx.select().from(omisiones).where(eq(omisiones.contractId, contractId)).all();
   const omisMap = new Map(omis.map((o) => [o.fecha, o.motivo]));
 
   let base = cuotaDefault;
@@ -46,8 +45,8 @@ export async function ensureDays(
     base = ordenados.length ? ordenados[ordenados.length - 1].cuotaDia : undefined;
   }
   if (base === undefined) {
-    const veh = await db.select().from(vehicles).where(eq(vehicles.id, ct.vehicleId));
-    base = veh[0]?.cuotaBase ?? 17000;
+    const veh = tx.select().from(vehicles).where(eq(vehicles.id, ct.vehicleId)).get();
+    base = veh?.cuotaBase ?? 17000;
   }
 
   let seq = maxSeq;
@@ -58,26 +57,44 @@ export async function ensureDays(
     const domingoOmi = ct.omitirDomingos === 1 && esDomingo(f);
     const exento = motivoOmi !== null || domingoOmi;
     seq += 1;
-    await db.insert(ledgerDays).values({
-      id: uid(),
-      contractId,
-      diaSeq: seq,
-      fecha: f,
-      cuotaDia: exento ? 0 : base,
-      exento: exento ? 1 : 0,
-      motivo: motivoOmi ?? (domingoOmi ? "Domingo" : null),
-      createdAt: nowISO(),
-    });
+    tx.insert(ledgerDays)
+      .values({
+        id: uid(),
+        contractId,
+        diaSeq: seq,
+        fecha: f,
+        cuotaDia: exento ? 0 : base,
+        exento: exento ? 1 : 0,
+        motivo: motivoOmi ?? (domingoOmi ? "Domingo" : null),
+        createdAt: nowISO(),
+      })
+      .onConflictDoNothing()
+      .run();
+    existentes.add(f);
     creados += 1;
   }
   return creados;
 }
 
+/**
+ * Crea los días faltantes hasta `hastaFecha`. Idempotente.
+ * Domingos con omitirDomingos y fechas en `omisiones` → exentos (cuota 0).
+ */
+export function ensureDays(contractId: string, hastaFecha: string, cuotaDefault?: number): number {
+  return db.transaction((tx) => ensureDaysTx(tx, contractId, hastaFecha, cuotaDefault));
+}
+
+/** Generación + inserto extra dentro de UNA transacción del llamador. */
+export function ensureDaysInTx(tx: Tx, contractId: string, hastaFecha: string): number {
+  return ensureDaysTx(tx, contractId, hastaFecha);
+}
+
 /** ¿Existe el día (contractId, fecha)? */
-export async function diaExiste(contractId: string, fecha: string) {
-  const rows = await db
+export function diaExiste(contractId: string, fecha: string) {
+  const rows = db
     .select({ id: ledgerDays.id })
     .from(ledgerDays)
-    .where(and(eq(ledgerDays.contractId, contractId), eq(ledgerDays.fecha, fecha)));
+    .where(and(eq(ledgerDays.contractId, contractId), eq(ledgerDays.fecha, fecha)))
+    .all();
   return rows.length > 0;
 }

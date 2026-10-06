@@ -4,6 +4,7 @@ import { ledgerDays, contracts, clients, payments } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getLedger } from "@/server/db/ledger";
 import { ensureDays } from "@/server/db/ensure";
+import { audit } from "@/server/db/audit";
 import { hoyBogota, esFechaValida } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -78,10 +79,11 @@ export async function POST(req: Request) {
   return Response.json({ ok: true, creados });
 }
 
-// PATCH /api/ledger {contractId, fecha, cuotaDia?, nuevaFecha?, motivo?} (solo admin)
+// PATCH /api/ledger {contractId, fecha, cuotaDia?, nuevaFecha?, motivo?} (solo admin, con auditoría)
 export async function PATCH(req: Request) {
+  let me;
   try {
-    await requireRole("admin");
+    me = await requireRole("admin");
   } catch (res) {
     return res as Response;
   }
@@ -129,14 +131,21 @@ export async function PATCH(req: Request) {
   if (Object.keys(patch).length === 0)
     return Response.json({ error: "nada que actualizar" }, { status: 400 });
 
-  await db.update(ledgerDays).set(patch).where(eq(ledgerDays.id, day.id));
+  db.transaction((tx) => {
+    tx.update(ledgerDays).set(patch).where(eq(ledgerDays.id, day.id)).run();
+    audit(tx, {
+      userId: me.id, accion: "editar_dia", entidad: "ledger_days",
+      entidadId: day.id, antes: day, despues: patch,
+    });
+  });
   return Response.json({ ok: true });
 }
 
-// DELETE /api/ledger?contractId=&fecha= (solo admin, solo sin pagos)
+// DELETE /api/ledger?contractId=&fecha= (solo admin, solo sin pagos, con auditoría)
 export async function DELETE(req: Request) {
+  let me;
   try {
-    await requireRole("admin");
+    me = await requireRole("admin");
   } catch (res) {
     return res as Response;
   }
@@ -152,8 +161,19 @@ export async function DELETE(req: Request) {
   if (pays.length > 0)
     return Response.json({ error: "el día tiene pagos: bórralos primero" }, { status: 400 });
 
-  await db
-    .delete(ledgerDays)
+  const rows = await db
+    .select()
+    .from(ledgerDays)
     .where(and(eq(ledgerDays.contractId, contractId), eq(ledgerDays.fecha, fecha)));
+  if (!rows[0]) return Response.json({ error: "día no existe" }, { status: 404 });
+  db.transaction((tx) => {
+    tx.delete(ledgerDays)
+      .where(and(eq(ledgerDays.contractId, contractId), eq(ledgerDays.fecha, fecha)))
+      .run();
+    audit(tx, {
+      userId: me.id, accion: "borrar_dia", entidad: "ledger_days",
+      entidadId: rows[0].id, antes: rows[0],
+    });
+  });
   return Response.json({ ok: true });
 }

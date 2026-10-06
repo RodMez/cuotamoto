@@ -9,14 +9,23 @@ export type LedgerRow = {
   exento: boolean;
   motivo: string | null;
   totalPagado: number;
+  /** Saldo corrido (puede ser negativo = crédito). Nunca se almacena: se deriva. */
+  saldo: number;
   deudaAcumulada: number;
+  /** Saldo a favor disponible después de este día. */
+  credito: number;
+  /** Cuánto del crédito previo cubrió la cuota de hoy. */
+  creditoUsado: number;
   estado: "Al día" | "Pendiente";
   pagos: { id: string; monto: number; metodo: string; nota: string | null }[];
 };
 
 /**
- * Deuda(n) = max(0, Deuda(n-1) + cuotaDia - SUM(pagos dia))
- * Arranca en contracts.saldoInicial. Orden cronológico por fecha.
+ * Saldo corrido derivado (sin columna de crédito: no se desincroniza
+ * al editar/borrar historial, todo se recalcula solo):
+ *   saldo += cuotaDia - SUM(pagos dia), arranca en saldoInicial
+ *   deuda = max(0, saldo), credito = max(0, -saldo)
+ * Los exentos (cuota 0) conservan el crédito.
  * Invariante: todo pago tiene su día (la API lo garantiza).
  */
 export async function getLedger(contractId: string): Promise<LedgerRow[]> {
@@ -24,7 +33,6 @@ export async function getLedger(contractId: string): Promise<LedgerRow[]> {
     .select()
     .from(contracts)
     .where(eq(contracts.id, contractId));
-  const saldoInicial = ct[0]?.saldoInicial ?? 0;
 
   const days = await db
     .select()
@@ -44,11 +52,12 @@ export async function getLedger(contractId: string): Promise<LedgerRow[]> {
     byFecha.set(p.fecha, arr);
   }
 
-  let deuda = saldoInicial;
+  let saldo = ct[0]?.saldoInicial ?? 0;
   return days.map((d) => {
     const lista = byFecha.get(d.fecha) ?? [];
     const total = lista.reduce((a: number, p: typeof pays[number]) => a + p.monto, 0);
-    deuda = Math.max(0, deuda + d.cuotaDia - total);
+    const creditoAntes = Math.max(0, -saldo);
+    saldo = saldo + d.cuotaDia - total;
     return {
       diaSeq: d.diaSeq,
       fecha: d.fecha,
@@ -56,8 +65,11 @@ export async function getLedger(contractId: string): Promise<LedgerRow[]> {
       exento: (d.exento ?? 0) === 1,
       motivo: d.motivo,
       totalPagado: total,
-      deudaAcumulada: deuda,
-      estado: deuda <= 0 ? "Al día" : "Pendiente",
+      saldo,
+      deudaAcumulada: Math.max(0, saldo),
+      credito: Math.max(0, -saldo),
+      creditoUsado: Math.min(creditoAntes, d.cuotaDia),
+      estado: saldo <= 0 ? ("Al día" as const) : ("Pendiente" as const),
       pagos: lista.map((p) => ({
         id: p.id,
         monto: p.monto,
@@ -77,6 +89,7 @@ export function summarize(ledger: LedgerRow[], saldoInicial = 0) {
       .reduce((a, r) => a + r.totalPagado, 0);
   return {
     deudaTotal: last?.deudaAcumulada ?? saldoInicial,
+    creditoTotal: last?.credito ?? 0,
     diasPendientes: pendientes,
     diasTotal: ledger.length,
     recaudoMes,

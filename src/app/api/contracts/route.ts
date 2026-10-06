@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { contracts, vehicles, clients } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { uid, nowISO } from "@/lib/utils";
+import { audit } from "@/server/db/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +11,9 @@ export const dynamic = "force-dynamic";
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(req: Request) {
+  let me;
   try {
-    await requireRole("admin", "cobrador");
+    me = await requireRole("admin", "cobrador");
   } catch (res) {
     return res as Response;
   }
@@ -48,15 +50,29 @@ export async function POST(req: Request) {
   };
   if (!Number.isInteger(row.saldoInicial) || row.saldoInicial < 0)
     return Response.json({ error: "saldoInicial inválido (entero ≥ 0)" }, { status: 400 });
-  await db.insert(contracts).values(row);
+
+  // Todo validado ANTES de tocar nada; desactivar+crear en una transacción.
+  db.transaction((tx) => {
+    // Regla producción: 1 contrato activo por moto. Desactiva anteriores.
+    tx.update(contracts)
+      .set({ activo: 0 })
+      .where(and(eq(contracts.vehicleId, vehicleId), eq(contracts.activo, 1)))
+      .run();
+    tx.insert(contracts).values(row).run();
+    audit(tx, {
+      userId: me.id, accion: "crear_contrato", entidad: "contracts",
+      entidadId: row.id, despues: row,
+    });
+  });
   return Response.json({ ok: true, contract: row });
 }
 
 // PATCH /api/contracts {contractId, saldoInicial?, omitirDomingos?} (solo admin)
 // La deuda se recalcula sola porque es derivada.
 export async function PATCH(req: Request) {
+  let me;
   try {
-    await requireRole("admin");
+    me = await requireRole("admin");
   } catch (res) {
     return res as Response;
   }
@@ -80,6 +96,14 @@ export async function PATCH(req: Request) {
   if (Object.keys(patch).length === 0)
     return Response.json({ error: "nada que actualizar" }, { status: 400 });
 
-  await db.update(contracts).set(patch).where(eq(contracts.id, contractId));
+  const antes = await db.select().from(contracts).where(eq(contracts.id, contractId));
+  if (!antes[0]) return Response.json({ error: "contrato no existe" }, { status: 404 });
+  db.transaction((tx) => {
+    tx.update(contracts).set(patch).where(eq(contracts.id, contractId)).run();
+    audit(tx, {
+      userId: me.id, accion: "editar_contrato", entidad: "contracts",
+      entidadId: contractId, antes: antes[0], despues: patch,
+    });
+  });
   return Response.json({ ok: true });
 }

@@ -8,7 +8,8 @@ type Cli = { id: string; nombre: string; telefono: string };
 type Pago = { id: string; monto: number; metodo: string; nota: string | null };
 type Row = {
   diaSeq: number; fecha: string; cuotaDia: number; exento: boolean; motivo: string | null;
-  totalPagado: number; deudaAcumulada: number; estado: string; pagos: Pago[];
+  totalPagado: number; deudaAcumulada: number; credito: number; creditoUsado: number;
+  estado: string; pagos: Pago[];
 };
 
 export default function DashboardClient() {
@@ -52,6 +53,7 @@ export default function DashboardClient() {
   const last = [...ledger].reverse().pop();
   const ct = cts.find((c) => c.id === contractId);
   const deuda = last?.deudaAcumulada ?? ct?.saldoInicial ?? 0;
+  const credito = last?.credito ?? 0;
   const pend = ledger.filter((x) => x.estado === "Pendiente").length;
   const mes = hoyBogota().slice(0, 7);
   const recaudo = ledger.filter((x) => x.fecha.startsWith(mes)).reduce((a, x) => a + x.totalPagado, 0);
@@ -129,7 +131,7 @@ export default function DashboardClient() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="card p-4"><p className="text-xs text-slate-400">DEUDA TOTAL</p><p className="font-mono-num text-xl font-bold">{fmtCOP(deuda)}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-400">DEUDA TOTAL</p><p className="font-mono-num text-xl font-bold">{fmtCOP(deuda)}</p>{credito > 0 && <p className="text-xs text-emerald-300">a favor: {fmtCOP(credito)}</p>}</div>
         <div className="card p-4"><p className="text-xs text-slate-400">DÍAS PENDIENTES</p><p className="font-mono-num text-xl font-bold">{pend}/{ledger.length}</p></div>
         <div className="card p-4"><p className="text-xs text-slate-400">RECAUDO {mes}</p><p className="font-mono-num text-xl font-bold">{fmtCOP(recaudo)}</p></div>
         <button className="btn btn-accent text-lg font-bold" onClick={() => { setMonto(""); setModalAbierto(true); }}>+ Abonar hoy</button>
