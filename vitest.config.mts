@@ -26,6 +26,11 @@ export default defineConfig({
       reporter: ["text", "lcov"],
       include: ["src/**/*.ts", "src/**/*.tsx"],
       exclude: ["src/**/*.test.{ts,tsx}", "**/node_modules/**"],
+      // Ratchet inicial (2026-10): líneas ~54%. Solo rige con --coverage.
+      thresholds: {
+        lines: 48,
+        statements: 48,
+      },
     },
   },
   resolve: {
