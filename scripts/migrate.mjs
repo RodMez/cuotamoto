@@ -88,6 +88,14 @@ try {
   await migrate(db, { migrationsFolder: "./drizzle" });
   console.log("[migrate] OK");
 
+  // 2b. Fixups idempotentes de datos (sin cambio de esquema: no van al journal)
+  const normalizados = sqlite
+    .prepare("UPDATE users SET email = lower(email) WHERE email != lower(email)")
+    .run();
+  if (normalizados.changes > 0) {
+    console.log(`[migrate] emails normalizados a minúsculas: ${normalizados.changes}`);
+  }
+
   // 3. Admin inicial
   const uid = () => crypto.randomUUID();
   const now = () => new Date().toISOString();

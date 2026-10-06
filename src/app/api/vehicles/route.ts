@@ -1,7 +1,8 @@
-import { identity } from "@/server/authz";
+import { identity, requireRole } from "@/server/authz";
 import { db } from "@/server/db";
 import { vehicles, contracts, clients } from "@/server/db/schema";
 import { uid, nowISO } from "@/lib/utils";
+import { audit } from "@/server/db/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,8 +28,12 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const me = await identity();
-  if (me?.rol !== "admin") return Response.json({ error: "solo admin" }, { status: 403 });
+  let me;
+  try {
+    me = await requireRole("admin");
+  } catch (res) {
+    return res as Response;
+  }
   const b = await req.json();
   const placa = String(b.placa ?? "").trim().toUpperCase();
   const cuotaBase = Number(b.cuotaBase);
@@ -42,6 +47,16 @@ export async function POST(req: Request) {
     activa: 1,
     createdAt: nowISO(),
   };
-  await db.insert(vehicles).values(row);
+  try {
+    db.transaction((tx) => {
+      tx.insert(vehicles).values(row).run();
+      audit(tx, {
+        userId: me.id, accion: "crear_vehiculo", entidad: "vehicles",
+        entidadId: row.id, despues: row,
+      });
+    });
+  } catch {
+    return Response.json({ error: "placa ya existe" }, { status: 409 });
+  }
   return Response.json({ ok: true, vehicle: row });
 }

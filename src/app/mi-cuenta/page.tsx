@@ -1,5 +1,6 @@
-import { auth } from "@/auth";
+import { identity } from "@/server/authz";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/server/db";
 import { contracts, clients } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -11,10 +12,10 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function MiCuenta() {
-  const s = await auth();
-  if (!s?.user) redirect("/login");
-  const myId = (s.user as unknown as { id: string }).id;
-  const rol = (s.user as unknown as { rol: string }).rol;
+  const me = await identity();
+  if (!me) redirect("/login");
+  const myId = me.id;
+  const rol = me.rol;
   const clis = await db.select().from(clients);
   const mine = clis.find((c) => c.userId === myId);
   if (rol !== "conductor" || !mine) {
@@ -47,7 +48,7 @@ export default async function MiCuenta() {
           </div>
         ))}
       </div>
-      <a className="btn btn-ghost w-full text-center" href="/api/auth/signout">Salir</a>
+      <Link className="btn btn-ghost w-full text-center" href="/api/auth/signout">Salir</Link>
     </div>
   );
 }

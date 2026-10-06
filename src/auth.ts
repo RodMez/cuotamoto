@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/server/db";
 import { users, loginAttempts } from "@/server/db/schema";
-import { eq, or } from "drizzle-orm";
+import { eq, or, lt } from "drizzle-orm";
 
 const MAX_INTENTOS = 5;
 const BLOQUEO_MS = 15 * 60 * 1000;
@@ -27,7 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!ident || !pass) return null;
 
         const ahora = new Date();
-        const intento = await db
+        let intento: typeof loginAttempts.$inferSelect | undefined = await db
           .select()
           .from(loginAttempts)
           .where(eq(loginAttempts.identificador, ident))
@@ -36,6 +36,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (intento?.bloqueadoHasta && new Date(intento.bloqueadoHasta) > ahora) {
           return null; // misma respuesta que credencial mala: no revelar el bloqueo
         }
+        if (intento?.bloqueadoHasta) {
+          // Bloqueo vencido: la ventana reinicia, no se arrastra el contador
+          await db.delete(loginAttempts).where(eq(loginAttempts.identificador, ident));
+          intento = undefined;
+        }
+        // Purga oportunista: filas de identificadores que no reintentan (>24h)
+        const ayer = new Date(ahora.getTime() - 24 * 60 * 60 * 1000).toISOString();
+        await db
+          .delete(loginAttempts)
+          .where(lt(loginAttempts.actualizadoEn, ayer))
+          .catch(() => {});
 
         const rows = await db
           .select()

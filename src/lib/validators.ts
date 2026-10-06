@@ -7,7 +7,7 @@ export const telefonoSchema = z
   .trim()
   .regex(/^[0-9+ ]{7,15}$/, "teléfono inválido");
 
-export const emailSchema = z.string().trim().email("email inválido").nullish();
+export const emailSchema = z.string().trim().toLowerCase().email("email inválido").nullish();
 
 export const crearUsuarioSchema = z.object({
   nombre: z.string().trim().max(120).nullish(),

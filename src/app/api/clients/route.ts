@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { clients } from "@/server/db/schema";
 import { uid, nowISO } from "@/lib/utils";
 import { crearClienteSchema } from "@/lib/validators";
+import { audit } from "@/server/db/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,8 +21,9 @@ export async function GET() {
 
 // POST /api/clients {nombre, telefono, documento?} (admin/cobrador)
 export async function POST(req: Request) {
+  let me;
   try {
-    await requireRole("admin", "cobrador");
+    me = await requireRole("admin", "cobrador");
   } catch (res) {
     return res as Response;
   }
@@ -34,7 +36,13 @@ export async function POST(req: Request) {
   const { nombre, telefono, documento } = parsed.data;
   const row = { id: uid(), nombre, telefono, documento: documento ?? null, createdAt: nowISO() };
   try {
-    await db.insert(clients).values(row);
+    db.transaction((tx) => {
+      tx.insert(clients).values(row).run();
+      audit(tx, {
+        userId: me.id, accion: "crear_cliente", entidad: "clients",
+        entidadId: row.id, despues: row,
+      });
+    });
   } catch {
     return Response.json({ error: "teléfono ya existe" }, { status: 409 });
   }

@@ -3,7 +3,7 @@ import { db } from "@/server/db";
 import { ledgerDays, contracts, clients, payments } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getLedger } from "@/server/db/ledger";
-import { ensureDays } from "@/server/db/ensure";
+import { ensureDays, ensureDaysInTx } from "@/server/db/ensure";
 import { audit } from "@/server/db/audit";
 import { hoyBogota, esFechaValida } from "@/lib/utils";
 
@@ -53,28 +53,39 @@ export async function POST(req: Request) {
   if (me.rol === "cobrador" && fecha > hoyBogota())
     return Response.json({ error: "fecha futura no permitida" }, { status: 400 });
 
-  let creados: number;
-  try {
-    creados = await ensureDays(contractId, fecha);
-  } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 400 });
-  }
-
-  // Cuota manual para la fecha pedida (solo si el día no es exento)
+  // Cuota manual validada ANTES; generación + override + auditoría en una tx
+  let cuotaDia: number | undefined;
   if (b.cuotaDia !== undefined) {
-    const cuotaDia = Number(b.cuotaDia);
+    cuotaDia = Number(b.cuotaDia);
     if (!Number.isInteger(cuotaDia) || cuotaDia <= 0)
       return Response.json({ error: "cuotaDia inválida" }, { status: 400 });
-    await db
-      .update(ledgerDays)
-      .set({ cuotaDia })
-      .where(
-        and(
-          eq(ledgerDays.contractId, contractId),
-          eq(ledgerDays.fecha, fecha),
-          eq(ledgerDays.exento, 0),
-        ),
-      );
+  }
+
+  let creados: number;
+  try {
+    creados = db.transaction((tx) => {
+      const n = ensureDaysInTx(tx, contractId, fecha);
+      // Cuota manual para la fecha pedida (solo si el día no es exento)
+      if (cuotaDia !== undefined) {
+        tx.update(ledgerDays)
+          .set({ cuotaDia })
+          .where(
+            and(
+              eq(ledgerDays.contractId, contractId),
+              eq(ledgerDays.fecha, fecha),
+              eq(ledgerDays.exento, 0),
+            ),
+          )
+          .run();
+      }
+      audit(tx, {
+        userId: me.id, accion: "generar_dias", entidad: "ledger_days",
+        entidadId: contractId, despues: { hasta: fecha, creados: n, cuotaDia: cuotaDia ?? null },
+      });
+      return n;
+    });
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 400 });
   }
   return Response.json({ ok: true, creados });
 }

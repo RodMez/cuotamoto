@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { vehicles, clients, contracts, ledgerDays, payments, omisiones } from "@/server/db/schema";
 import { getLedger, summarize } from "@/server/db/ledger";
 import { ensureDays } from "@/server/db/ensure";
-import { uid, nowISO } from "@/lib/utils";
+import { uid, nowISO, esFechaValida } from "@/lib/utils";
 
 // Congelan el comportamiento con crédito derivado (saldo corrido).
 // deuda = max(0, saldo), credito = max(0, −saldo). Nada se pierde.
@@ -146,5 +146,15 @@ describe("ensureDays", () => {
       "2026-09-28", "2026-09-29", "2026-09-30",
       "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05",
     ]);
+  });
+});
+
+describe("esFechaValida", () => {
+  it("rechaza fechas imposibles que Date.parse acepta", () => {
+    expect(esFechaValida("2026-02-31")).toBe(false); // Date.parse la mueve a marzo
+    expect(esFechaValida("2026-13-01")).toBe(false);
+    expect(esFechaValida("no-fecha")).toBe(false);
+    expect(esFechaValida("2026-02-28")).toBe(true);
+    expect(esFechaValida("2024-02-29")).toBe(true); // bisiesto real
   });
 });

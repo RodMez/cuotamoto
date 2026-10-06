@@ -18,11 +18,8 @@ if [ ${#AUTH_SECRET} -lt 32 ]; then
 fi
 
 if [ -z "$ADMIN_PASSWORD" ]; then
-  echo "[entrypoint] ERROR: ADMIN_PASSWORD is not set (obligatoria, mínimo 12 caracteres)" >&2
-  exit 1
-fi
-
-if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
+  echo "[entrypoint] WARN: ADMIN_PASSWORD no definida; si hay que crear el admin, migrate.mjs fallará" >&2
+elif [ ${#ADMIN_PASSWORD} -lt 12 ]; then
   echo "[entrypoint] ERROR: ADMIN_PASSWORD must be at least 12 characters" >&2
   exit 1
 fi

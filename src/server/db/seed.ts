@@ -1,27 +1,18 @@
 import { db, getSqlite } from "./index";
 import { users, vehicles, clients, contracts, ledgerDays, payments } from "./schema";
+import { migrate as drizzleMigrate } from "drizzle-orm/better-sqlite3/migrator";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import bcrypt from "bcryptjs";
 import { uid, nowISO } from "@/lib/utils";
 
-function migrate() {
-  getSqlite().exec(`
-  CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, telefono TEXT UNIQUE, password_hash TEXT NOT NULL, rol TEXT NOT NULL DEFAULT 'viewer', created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS vehicles (id TEXT PRIMARY KEY, placa TEXT NOT NULL UNIQUE, alias TEXT, cuota_base INTEGER NOT NULL, activa INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nombre TEXT NOT NULL, telefono TEXT NOT NULL UNIQUE, documento TEXT, user_id TEXT, created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS contracts (id TEXT PRIMARY KEY, vehicle_id TEXT NOT NULL, client_id TEXT NOT NULL, fecha_inicio TEXT NOT NULL, activo INTEGER NOT NULL DEFAULT 1, saldo_inicial INTEGER NOT NULL DEFAULT 0, omitir_domingos INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS ledger_days (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, dia_seq INTEGER NOT NULL, fecha TEXT NOT NULL, cuota_dia INTEGER NOT NULL, exento INTEGER NOT NULL DEFAULT 0, motivo TEXT, created_at TEXT NOT NULL);
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_day_contract_seq ON ledger_days (contract_id, dia_seq);
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_day_contract_fecha ON ledger_days (contract_id, fecha);
-  CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, fecha TEXT NOT NULL, monto INTEGER NOT NULL, metodo TEXT NOT NULL DEFAULT 'efectivo', nota TEXT, created_by TEXT, created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS omisiones (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, fecha TEXT NOT NULL, motivo TEXT, created_at TEXT NOT NULL);
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_omision_contract_fecha ON omisiones (contract_id, fecha);
-  CREATE TABLE IF NOT EXISTS login_attempts (identificador TEXT PRIMARY KEY, intentos INTEGER NOT NULL DEFAULT 0, bloqueado_hasta TEXT, actualizado_en TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS audit_log (id TEXT PRIMARY KEY, ts TEXT NOT NULL, user_id TEXT, accion TEXT NOT NULL, entidad TEXT NOT NULL, entidad_id TEXT, antes TEXT, despues TEXT);
-  `);
+// Dev/local: el esquema lo gobierna drizzle (./drizzle), igual que en prod.
+// Así el seed nunca diverge del migrator ni rompe 0001 con "already exists".
+async function migrate() {
+  drizzleMigrate(drizzle(getSqlite()), { migrationsFolder: "./drizzle" });
 }
 
 async function main() {
-  migrate();
+  await migrate();
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@cuotamoto.local";
   const adminPass = process.env.ADMIN_PASSWORD;
   if (!adminPass || adminPass.length < 12) {

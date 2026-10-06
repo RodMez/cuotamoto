@@ -6,7 +6,9 @@ import { getToken } from "next-auth/jwt";
 // La frescura del rol se valida en cada API con requireRole().
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  // Con AUTH_URL=https, Auth.js usa la cookie __Secure-*: hay que decirlo.
+  const secure = (process.env.AUTH_URL ?? "").startsWith("https://");
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: secure });
   const rol = (token as unknown as { rol?: string } | null)?.rol;
 
   if (!token) {

@@ -1,5 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Component, Suspense, use, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { fmtCOP, hoyBogota } from "@/lib/utils";
 
 type Veh = { id: string; placa: string; alias: string | null; cuotaBase: number };
@@ -11,125 +13,119 @@ type Row = {
   totalPagado: number; deudaAcumulada: number; credito: number; creditoUsado: number;
   estado: string; pagos: Pago[];
 };
+type Base = { vehicles: Veh[]; contracts: Ct[]; clients: Cli[] };
 
-export default function DashboardClient() {
-  const [vehs, setVehs] = useState<Veh[]>([]);
-  const [cts, setCts] = useState<Ct[]>([]);
-  const [clis, setClis] = useState<Cli[]>([]);
-  const [contractId, setContractId] = useState("");
-  const [ledger, setLedger] = useState<Row[]>([]);
+async function fetchJSON(url: string, init?: RequestInit) {
+  const r = await fetch(url, init);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.error ?? `Error ${r.status}`);
+  return j;
+}
+
+function useJSON<T>(url: string): T {
+  return use(useMemo(() => fetchJSON(url) as Promise<T>, [url]));
+}
+
+class PanelError extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="card p-6 text-center space-y-2">
+          <p className="font-bold">No se pudo cargar</p>
+          <p className="text-sm text-red-300">{this.state.error.message}</p>
+          <button className="btn btn-ghost" onClick={() => this.setState({ error: null })}>
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function PanelCargando({ texto }: { texto: string }) {
+  return (
+    <div className="card p-6 text-center">
+      <p className="text-sm text-slate-300">{texto}</p>
+    </div>
+  );
+}
+
+function LedgerPanel({
+  contractId,
+  veh,
+  ct,
+  onMutated,
+}: {
+  contractId: string;
+  veh?: Veh;
+  ct?: Ct;
+  onMutated: () => void;
+}) {
+  const data = useJSON<{ ledger: Row[] }>(`/api/ledger?contractId=${contractId}`);
+  const ledger = useMemo(() => [...(data.ledger ?? [])].reverse(), [data]);
   const [fecha, setFecha] = useState(hoyBogota());
-  const [cuota, setCuota] = useState("17000");
-  // Modal pago (siempre hoy Bogotá)
+  const [cuota, setCuota] = useState<string | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [monto, setMonto] = useState("");
   const [metodo, setMetodo] = useState("efectivo");
   const [nota, setNota] = useState("");
   const hoy = hoyBogota();
+  const cuotaVal = cuota ?? String(veh?.cuotaBase ?? 17000);
 
-  async function loadBase() {
-    const r = await fetch("/api/vehicles");
-    const j = await r.json();
-    setVehs(j.vehicles ?? []);
-    setCts(j.contracts ?? []);
-    setClis(j.clients ?? []);
-    if (!contractId && j.contracts?.[0]) setContractId(j.contracts[0].id);
-  }
-  async function loadLedger(id: string) {
-    if (!id) return;
-    const r = await fetch(`/api/ledger?contractId=${id}`);
-    const j = await r.json();
-    setLedger((j.ledger ?? []).slice().reverse()); // más reciente arriba como Notion
-  }
-  useEffect(() => { loadBase(); }, []);
-  useEffect(() => { loadLedger(contractId); }, [contractId]);
-  // Precarga cuota con la base de la moto seleccionada
-  useEffect(() => {
-    const ct = cts.find((c) => c.id === contractId);
-    const veh = vehs.find((v) => v.id === ct?.vehicleId);
-    if (veh) setCuota(String(veh.cuotaBase));
-  }, [contractId, vehs, cts]);
-
-  const last = [...ledger].reverse().pop();
-  const ct = cts.find((c) => c.id === contractId);
+  const last = ledger[ledger.length - 1];
   const deuda = last?.deudaAcumulada ?? ct?.saldoInicial ?? 0;
   const credito = last?.credito ?? 0;
   const pend = ledger.filter((x) => x.estado === "Pendiente").length;
-  const mes = hoyBogota().slice(0, 7);
+  const mes = hoy.slice(0, 7);
   const recaudo = ledger.filter((x) => x.fecha.startsWith(mes)).reduce((a, x) => a + x.totalPagado, 0);
 
   async function genDias() {
-    const r = await fetch("/api/ledger", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contractId, fecha, cuotaDia: Number(cuota) }),
-    });
-    const j = await r.json();
-    if (!r.ok) alert(j.error);
-    else { setFecha(hoyBogota()); loadLedger(contractId); }
+    try {
+      await fetchJSON("/api/ledger", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractId, fecha, cuotaDia: Number(cuotaVal) }),
+      });
+      setFecha(hoyBogota());
+      onMutated();
+    } catch (e) {
+      alert((e as Error).message);
+    }
   }
   async function registrarPago() {
-    if (!monto) return alert("monto requerido");
-    const r = await fetch("/api/payments", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contractId, monto: Number(monto), metodo, nota: nota || undefined }),
-    });
-    const j = await r.json();
-    if (!r.ok) alert(j.error);
-    else { setMonto(""); setNota(""); setModalAbierto(false); loadLedger(contractId); }
+    if (!monto) {
+      alert("monto requerido");
+      return;
+    }
+    try {
+      await fetchJSON("/api/payments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractId, monto: Number(monto), metodo, nota: nota || undefined }),
+      });
+      setMonto("");
+      setNota("");
+      setModalAbierto(false);
+      onMutated();
+    } catch (e) {
+      alert((e as Error).message);
+    }
   }
   async function borrarPago(id: string) {
     if (!confirm("¿Borrar este pago? (solo admin)")) return;
-    const r = await fetch(`/api/payments?id=${id}`, { method: "DELETE" });
-    if (!r.ok) alert((await r.json()).error);
-    else loadLedger(contractId);
-  }
-
-  const veh = vehs.find((v) => v.id === ct?.vehicleId);
-  const cli = clis.find((c) => c.id === ct?.clientId);
-
-  if (cts.length === 0) {
-    return (
-      <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4 w-full">
-        <h1 className="text-2xl font-bold">Pagos — CuotaMoto</h1>
-        <div className="card p-6 text-center space-y-3">
-          <p className="font-bold">Aún no hay contratos</p>
-          <p className="text-sm text-slate-300">Paso 1: crea una moto · Paso 2: crea el cliente · Paso 3: crea el contrato.</p>
-          <a className="btn btn-primary inline-block" href="/admin">Ir a /admin</a>
-        </div>
-      </div>
-    );
+    try {
+      await fetchJSON(`/api/payments?id=${id}`, { method: "DELETE" });
+      onMutated();
+    } catch (e) {
+      alert((e as Error).message);
+    }
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-4 w-full">
-      <header className="flex flex-wrap items-center gap-3 justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Pagos — CuotaMoto</h1>
-          <p className="text-sm text-slate-300">
-            {veh ? `${veh.placa} · ${cli?.nombre ?? ""} · base ${fmtCOP(veh.cuotaBase)}` : "sin contratos"}
-            {(ct?.saldoInicial ?? 0) > 0 && ` · saldo inicial ${fmtCOP(ct!.saldoInicial)}`}
-            {ct ? ` · desde ${ct.fechaInicio}` : ""}
-          </p>
-        </div>
-        <nav className="flex gap-2 text-sm">
-          <a className="btn btn-ghost" href="/pendientes">Pendientes</a>
-          <a className="btn btn-ghost" href="/admin">Admin</a>
-          <a className="btn btn-ghost" href="/api/auth/signout">Salir</a>
-        </nav>
-      </header>
-
-      <div className="flex gap-2 flex-wrap">
-        {cts.map((c) => {
-          const v = vehs.find((x) => x.id === c.vehicleId);
-          return (
-            <button key={c.id} onClick={() => setContractId(c.id)}
-              className={`btn ${c.id === contractId ? "btn-primary" : "btn-ghost"}`}>
-              {v?.placa ?? c.id.slice(0, 6)}
-            </button>
-          );
-        })}
-      </div>
-
+    <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="card p-4"><p className="text-xs text-slate-400">DEUDA TOTAL</p><p className="font-mono-num text-xl font-bold">{fmtCOP(deuda)}</p>{credito > 0 && <p className="text-xs text-emerald-300">a favor: {fmtCOP(credito)}</p>}</div>
         <div className="card p-4"><p className="text-xs text-slate-400">DÍAS PENDIENTES</p><p className="font-mono-num text-xl font-bold">{pend}/{ledger.length}</p></div>
@@ -139,7 +135,7 @@ export default function DashboardClient() {
 
       <div className="card p-4 flex flex-wrap gap-2 items-end">
         <div><label className="text-xs">Generar días hasta</label><input className="input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
-        <div><label className="text-xs">Cuota (si crea nuevo)</label><input className="input font-mono-num" value={cuota} onChange={(e) => setCuota(e.target.value)} /></div>
+        <div><label className="text-xs">Cuota (si crea nuevo)</label><input className="input font-mono-num" value={cuotaVal} onChange={(e) => setCuota(e.target.value)} /></div>
         <button className="btn btn-accent" onClick={genDias}>+ Generar días</button>
         <p className="text-xs text-slate-400 w-full">Crea los faltantes hasta la fecha (respeta domingos y omisiones). Al registrar un pago el día se crea solo si falta.</p>
       </div>
@@ -181,7 +177,7 @@ export default function DashboardClient() {
         </table>
         )}
       </div>
-      <p className="text-xs text-slate-400">Deuda = max(0, anterior + cuota − pagos), arranca en saldo inicial. Todo pago se aplica al día de hoy.</p>
+      <p className="text-xs text-slate-400">Saldo corrido desde el saldo inicial: deuda = lo que falta, crédito = saldo a favor. Todo pago se aplica al día de hoy.</p>
 
       {modalAbierto && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" onClick={() => setModalAbierto(false)}>
@@ -201,6 +197,78 @@ export default function DashboardClient() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+export default function DashboardClient() {
+  const base = useJSON<Base>("/api/vehicles");
+  const vehs = base.vehicles ?? [];
+  const cts = base.contracts ?? [];
+  const clis = base.clients ?? [];
+  const [contractId, setContractId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const ct = cts.find((c) => c.id === contractId) ?? cts[0];
+  const activeId = ct?.id ?? null;
+  const veh = vehs.find((v) => v.id === ct?.vehicleId);
+  const cli = clis.find((c) => c.id === ct?.clientId);
+
+  if (cts.length === 0) {
+    return (
+      <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4 w-full">
+        <h1 className="text-2xl font-bold">Pagos — CuotaMoto</h1>
+        <div className="card p-6 text-center space-y-3">
+          <p className="font-bold">Aún no hay contratos</p>
+          <p className="text-sm text-slate-300">Paso 1: crea una moto · Paso 2: crea el cliente · Paso 3: crea el contrato.</p>
+          <Link className="btn btn-primary inline-block" href="/admin">Ir a /admin</Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-4 w-full">
+      <header className="flex flex-wrap items-center gap-3 justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Pagos — CuotaMoto</h1>
+          <p className="text-sm text-slate-300">
+            {veh ? `${veh.placa} · ${cli?.nombre ?? ""} · base ${fmtCOP(veh.cuotaBase)}` : "sin contratos"}
+            {(ct?.saldoInicial ?? 0) > 0 && ` · saldo inicial ${fmtCOP(ct!.saldoInicial)}`}
+            {ct ? ` · desde ${ct.fechaInicio}` : ""}
+          </p>
+        </div>
+        <nav className="flex gap-2 text-sm">
+          <Link className="btn btn-ghost" href="/pendientes">Pendientes</Link>
+          <Link className="btn btn-ghost" href="/admin">Admin</Link>
+          <button className="btn btn-ghost" onClick={() => signOut({ callbackUrl: "/login" })}>Salir</button>
+        </nav>
+      </header>
+
+      <div className="flex gap-2 flex-wrap">
+        {cts.map((c) => {
+          const v = vehs.find((x) => x.id === c.vehicleId);
+          return (
+            <button key={c.id} onClick={() => setContractId(c.id)}
+              className={`btn ${c.id === activeId ? "btn-primary" : "btn-ghost"}`}>
+              {v?.placa ?? c.id.slice(0, 6)}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeId && (
+        <PanelError key={activeId}>
+          <Suspense fallback={<PanelCargando texto="Cargando días…" />}>
+            <LedgerPanel
+              key={`${activeId}:${refreshKey}`}
+              contractId={activeId}
+              veh={veh}
+              ct={ct}
+              onMutated={() => setRefreshKey((k) => k + 1)}
+            />
+          </Suspense>
+        </PanelError>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
-import { auth } from "@/auth";
+import { identity } from "@/server/authz";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/server/db";
 import { contracts, vehicles, clients } from "@/server/db/schema";
 import { getLedger } from "@/server/db/ledger";
@@ -10,9 +11,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function Pendientes() {
-  const s = await auth();
-  if (!s?.user) redirect("/login");
-  if ((s.user as unknown as { rol?: string })?.rol === "conductor") redirect("/mi-cuenta");
+  const me = await identity();
+  if (!me) redirect("/login");
+  if (me.rol === "conductor") redirect("/mi-cuenta");
 
   const cts = await db.select().from(contracts);
   const vehs = await db.select().from(vehicles);
@@ -39,7 +40,7 @@ export default async function Pendientes() {
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto w-full space-y-4">
       <h1 className="text-2xl font-bold">Pendientes — solo visual</h1>
-      <a className="btn btn-ghost" href="/">← Volver</a>
+      <Link className="btn btn-ghost" href="/">← Volver</Link>
       <div className="card p-4 space-y-2">
         {rows.length === 0 && <p className="text-emerald-300">Todo al día ✓</p>}
         {rows.map((r) => (
