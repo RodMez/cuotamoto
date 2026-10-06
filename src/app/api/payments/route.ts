@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { requireRole } from "@/server/authz";
 import { db } from "@/server/db";
 import { payments, contracts } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -12,10 +12,12 @@ export const dynamic = "force-dynamic";
 // Regla: el pago es SIEMPRE hoy (America/Bogota), sin excepciones.
 // La fecha del body se ignora. Si el día no existe, se genera en la misma operación.
 export async function POST(req: Request) {
-  const s = await auth();
-  const rol = (s?.user as unknown as { rol?: string } | undefined)?.rol as string;
-  if (rol !== "admin" && rol !== "cobrador")
-    return Response.json({ error: "sin permiso" }, { status: 403 });
+  let me;
+  try {
+    me = await requireRole("admin", "cobrador");
+  } catch (res) {
+    return res as Response;
+  }
   const b = await req.json();
   const monto = Number(b.monto);
   const contractId = String(b.contractId ?? "");
@@ -42,7 +44,7 @@ export async function POST(req: Request) {
     monto,
     metodo: String(b.metodo ?? "efectivo"),
     nota: b.nota ? String(b.nota) : null,
-    createdBy: (s?.user as unknown as { id: string } | undefined)?.id ?? null,
+    createdBy: me.id,
     createdAt: nowISO(),
   };
   await db.insert(payments).values(row);
@@ -51,8 +53,11 @@ export async function POST(req: Request) {
 
 // DELETE /api/payments?id=xxx (solo admin)
 export async function DELETE(req: Request) {
-  const s = await auth();
-  if ((s?.user as unknown as { rol?: string })?.rol !== "admin") return Response.json({ error: "solo admin" }, { status: 403 });
+  try {
+    await requireRole("admin");
+  } catch (res) {
+    return res as Response;
+  }
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return Response.json({ error: "id requerido" }, { status: 400 });

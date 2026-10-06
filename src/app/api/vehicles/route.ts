@@ -1,21 +1,20 @@
-import { auth } from "@/auth";
+import { identity } from "@/server/authz";
 import { db } from "@/server/db";
 import { vehicles, contracts, clients } from "@/server/db/schema";
 import { uid, nowISO } from "@/lib/utils";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const s = await auth();
-  if (!s?.user) return Response.json({ error: "no auth" }, { status: 401 });
+  const me = await identity();
+  if (!me) return Response.json({ error: "no auth" }, { status: 401 });
   // conductor solo ve su contrato (se filtra en contracts)
-  const rol = (s.user as unknown as { rol: string }).rol;
   const vehs = await db.select().from(vehicles);
   const cts = await db.select().from(contracts);
   const clis = await db.select().from(clients);
-  if (rol === "conductor") {
-    const myId = (s.user as unknown as { id: string }).id;
-    const myClient = clis.find((c) => c.userId === myId);
+  if (me.rol === "conductor") {
+    const myClient = clis.find((c) => c.userId === me.id);
     const myCts = cts.filter((c) => c.clientId === myClient?.id);
     const myVehIds = new Set(myCts.map((c) => c.vehicleId));
     return Response.json({
@@ -28,8 +27,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const s = await auth();
-  if ((s?.user as unknown as { rol?: string })?.rol !== "admin") return Response.json({ error: "solo admin" }, { status: 403 });
+  const me = await identity();
+  if (me?.rol !== "admin") return Response.json({ error: "solo admin" }, { status: 403 });
   const b = await req.json();
   const placa = String(b.placa ?? "").trim().toUpperCase();
   const cuotaBase = Number(b.cuotaBase);

@@ -21,7 +21,10 @@ function migrate() {
 async function main() {
   migrate();
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@cuotamoto.local";
-  const adminPass = process.env.ADMIN_PASSWORD ?? "admin123";
+  const adminPass = process.env.ADMIN_PASSWORD;
+  if (!adminPass || adminPass.length < 12) {
+    throw new Error("ADMIN_PASSWORD obligatoria (mínimo 12 caracteres) para crear el admin inicial");
+  }
 
   const existing = await db.select().from(users);
   if (existing.length === 0) {

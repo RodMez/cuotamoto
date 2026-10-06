@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { identity, requireRole } from "@/server/authz";
 import { db } from "@/server/db";
 import { ledgerDays, contracts, clients, payments } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -11,20 +11,18 @@ export const dynamic = "force-dynamic";
 
 // GET /api/ledger?contractId=xxx -> genera faltantes hasta hoy Bogotá y devuelve tabla
 export async function GET(req: Request) {
-  const s = await auth();
-  if (!s?.user) return Response.json({ error: "no auth" }, { status: 401 });
+  const me = await identity();
+  if (!me) return Response.json({ error: "no auth" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const contractId = searchParams.get("contractId");
   if (!contractId) return Response.json({ error: "contractId requerido" }, { status: 400 });
 
-  const rol = (s.user as unknown as { rol: string }).rol as string;
-  if (rol === "conductor") {
-    const myId = (s.user as unknown as { id: string }).id as string;
+  if (me.rol === "conductor") {
     const cts = await db.select().from(contracts).where(eq(contracts.id, contractId));
     const ct = cts[0];
     if (!ct) return Response.json({ error: "no existe" }, { status: 404 });
     const clis = await db.select().from(clients).where(eq(clients.id, ct.clientId));
-    if (clis[0]?.userId !== myId) return Response.json({ error: "no es tu contrato" }, { status: 403 });
+    if (clis[0]?.userId !== me.id) return Response.json({ error: "no es tu contrato" }, { status: 403 });
   }
   // Generación perezosa: días faltantes hasta hoy Bogotá (idempotente)
   try {
@@ -39,17 +37,19 @@ export async function GET(req: Request) {
 // POST /api/ledger {contractId, fecha, cuotaDia?} -> genera faltantes hasta fecha
 // (admin/cobrador). Respeta domingos/omisiones (cuota 0 exento).
 export async function POST(req: Request) {
-  const s = await auth();
-  const rol = (s?.user as unknown as { rol?: string } | undefined)?.rol as string;
-  if (rol !== "admin" && rol !== "cobrador")
-    return Response.json({ error: "sin permiso" }, { status: 403 });
+  let me;
+  try {
+    me = await requireRole("admin", "cobrador");
+  } catch (res) {
+    return res as Response;
+  }
   const b = await req.json();
   const contractId = String(b.contractId ?? "");
   const fecha = String(b.fecha ?? "");
   if (!contractId || !fecha) return Response.json({ error: "contractId y fecha" }, { status: 400 });
   if (!esFechaValida(fecha)) return Response.json({ error: "fecha inválida (YYYY-MM-DD)" }, { status: 400 });
 
-  if (rol === "cobrador" && fecha > hoyBogota())
+  if (me.rol === "cobrador" && fecha > hoyBogota())
     return Response.json({ error: "fecha futura no permitida" }, { status: 400 });
 
   let creados: number;
@@ -80,9 +80,11 @@ export async function POST(req: Request) {
 
 // PATCH /api/ledger {contractId, fecha, cuotaDia?, nuevaFecha?, motivo?} (solo admin)
 export async function PATCH(req: Request) {
-  const s = await auth();
-  if ((s?.user as unknown as { rol?: string })?.rol !== "admin")
-    return Response.json({ error: "solo admin" }, { status: 403 });
+  try {
+    await requireRole("admin");
+  } catch (res) {
+    return res as Response;
+  }
   const b = await req.json();
   const contractId = String(b.contractId ?? "");
   const fecha = String(b.fecha ?? "");
@@ -133,9 +135,11 @@ export async function PATCH(req: Request) {
 
 // DELETE /api/ledger?contractId=&fecha= (solo admin, solo sin pagos)
 export async function DELETE(req: Request) {
-  const s = await auth();
-  if ((s?.user as unknown as { rol?: string })?.rol !== "admin")
-    return Response.json({ error: "solo admin" }, { status: 403 });
+  try {
+    await requireRole("admin");
+  } catch (res) {
+    return res as Response;
+  }
   const { searchParams } = new URL(req.url);
   const contractId = searchParams.get("contractId") ?? "";
   const fecha = searchParams.get("fecha") ?? "";

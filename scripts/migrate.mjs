@@ -50,13 +50,17 @@ try {
     }
   }
 
-  const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const uid = () => crypto.randomUUID();
   const now = () => new Date().toISOString();
 
   const row = sqlite.prepare("SELECT COUNT(*) as n FROM users").get();
   if (row.n === 0) {
     const email = process.env.ADMIN_EMAIL ?? "admin@cuotamoto.local";
-    const pass = process.env.ADMIN_PASSWORD ?? "admin123";
+    const pass = process.env.ADMIN_PASSWORD;
+    if (!pass || pass.length < 12) {
+      console.error("[migrate] ERROR: ADMIN_PASSWORD obligatoria (mínimo 12 caracteres) para crear el admin inicial");
+      process.exit(1);
+    }
     const hash = await bcrypt.hash(pass, 10);
     sqlite
       .prepare(

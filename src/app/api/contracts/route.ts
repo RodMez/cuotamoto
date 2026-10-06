@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { requireRole } from "@/server/authz";
 import { db } from "@/server/db";
 import { contracts, vehicles, clients } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -10,10 +10,11 @@ export const dynamic = "force-dynamic";
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(req: Request) {
-  const s = await auth();
-  const rol = (s?.user as unknown as { rol?: string } | undefined)?.rol as string;
-  if (rol !== "admin" && rol !== "cobrador")
-    return Response.json({ error: "sin permiso" }, { status: 403 });
+  try {
+    await requireRole("admin", "cobrador");
+  } catch (res) {
+    return res as Response;
+  }
   const b = await req.json();
   const vehicleId = String(b.vehicleId ?? "");
   const clientId = String(b.clientId ?? "");
@@ -54,9 +55,11 @@ export async function POST(req: Request) {
 // PATCH /api/contracts {contractId, saldoInicial?, omitirDomingos?} (solo admin)
 // La deuda se recalcula sola porque es derivada.
 export async function PATCH(req: Request) {
-  const s = await auth();
-  if ((s?.user as unknown as { rol?: string })?.rol !== "admin")
-    return Response.json({ error: "solo admin" }, { status: 403 });
+  try {
+    await requireRole("admin");
+  } catch (res) {
+    return res as Response;
+  }
   const b = await req.json();
   const contractId = String(b.contractId ?? "");
   if (!contractId) return Response.json({ error: "contractId requerido" }, { status: 400 });

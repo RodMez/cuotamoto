@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { hoyBogota, todayISO } from "@/lib/utils";
+import { hoyBogota } from "@/lib/utils";
 import type { Cli, Ct, Omi, Veh } from "./types";
 import { Field, Modal } from "./ui";
 import { useToast } from "./Toast";
@@ -105,7 +105,7 @@ export function ContratoWizard({ vehs, clis, cts, onDone }: { vehs: Veh[]; clis:
   const [step, setStep] = useState(1);
   const [vehSel, setVehSel] = useState("");
   const [cliSel, setCliSel] = useState("");
-  const [inicio, setInicio] = useState(todayISO());
+  const [inicio, setInicio] = useState(hoyBogota());
   const [saldo, setSaldo] = useState("0");
   const [omitDom, setOmitDom] = useState(false);
   const [busy, setBusy] = useState(false);

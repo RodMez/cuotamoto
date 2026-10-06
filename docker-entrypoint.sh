@@ -17,6 +17,16 @@ if [ ${#AUTH_SECRET} -lt 32 ]; then
   exit 1
 fi
 
+if [ -z "$ADMIN_PASSWORD" ]; then
+  echo "[entrypoint] ERROR: ADMIN_PASSWORD is not set (obligatoria, mínimo 12 caracteres)" >&2
+  exit 1
+fi
+
+if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
+  echo "[entrypoint] ERROR: ADMIN_PASSWORD must be at least 12 characters" >&2
+  exit 1
+fi
+
 # Resolver path real: quita prefijo file: y query string
 DB_PATH="$DATABASE_URL"
 case "$DB_PATH" in

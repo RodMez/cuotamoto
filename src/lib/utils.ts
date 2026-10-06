@@ -24,8 +24,16 @@ export const hoyBogota = () =>
 export const esDomingo = (fecha: string) =>
   new Date(fecha + "T12:00:00").getDay() === 0;
 
-export const esFechaValida = (f: string) =>
-  /^\d{4}-\d{2}-\d{2}$/.test(f) && !Number.isNaN(Date.parse(f));
-export const uid = () =>
-  Math.random().toString(36).slice(2) + Date.now().toString(36);
+// Fecha calendario real YYYY-MM-DD (rechaza 2026-02-31, que Date.parse acepta)
+export const esFechaValida = (f: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return false;
+  const d = new Date(f + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return false;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}` === f;
+};
+
+export const uid = () => crypto.randomUUID();
 export const nowISO = () => new Date().toISOString();

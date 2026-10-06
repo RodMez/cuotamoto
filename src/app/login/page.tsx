@@ -30,7 +30,6 @@ export default function LoginPage() {
         <input className="input" type="password" placeholder="••••••" value={password} onChange={(e) => setPass(e.target.value)} />
         {err && <p className="text-sm text-red-300">{err}</p>}
         <button className="btn btn-primary w-full">Entrar</button>
-        <p className="text-xs text-slate-400">Seed: admin@cuotamoto.local / admin123</p>
       </form>
     </div>
   );

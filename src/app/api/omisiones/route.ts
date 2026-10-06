@@ -1,19 +1,25 @@
-import { auth } from "@/auth";
+import { identity, requireRole } from "@/server/authz";
 import { db } from "@/server/db";
-import { omisiones, contracts, ledgerDays, payments } from "@/server/db/schema";
+import { omisiones, contracts, clients, ledgerDays, payments } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { uid, nowISO, esFechaValida } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/omisiones?contractId=xxx
+// GET /api/omisiones?contractId=xxx (conductor: solo su contrato)
 export async function GET(req: Request) {
-  const s = await auth();
-  if (!s?.user) return Response.json({ error: "no auth" }, { status: 401 });
+  const me = await identity();
+  if (!me) return Response.json({ error: "no auth" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const contractId = searchParams.get("contractId") ?? "";
   if (!contractId) return Response.json({ error: "contractId requerido" }, { status: 400 });
+  if (me.rol === "conductor") {
+    const cts = await db.select().from(contracts).where(eq(contracts.id, contractId));
+    if (!cts[0]) return Response.json({ error: "no existe" }, { status: 404 });
+    const clis = await db.select().from(clients).where(eq(clients.id, cts[0].clientId));
+    if (clis[0]?.userId !== me.id) return Response.json({ error: "no es tu contrato" }, { status: 403 });
+  }
   const rows = await db.select().from(omisiones).where(eq(omisiones.contractId, contractId));
   return Response.json({ omisiones: rows });
 }
@@ -21,9 +27,11 @@ export async function GET(req: Request) {
 // POST /api/omisiones {contractId, fecha, motivo?} (solo admin)
 // Si el día ya existe y no tiene pagos, lo convierte a exento (cuota 0).
 export async function POST(req: Request) {
-  const s = await auth();
-  if ((s?.user as unknown as { rol?: string })?.rol !== "admin")
-    return Response.json({ error: "solo admin" }, { status: 403 });
+  try {
+    await requireRole("admin");
+  } catch (res) {
+    return res as Response;
+  }
   const b = await req.json();
   const contractId = String(b.contractId ?? "");
   const fecha = String(b.fecha ?? "");
@@ -58,9 +66,11 @@ export async function POST(req: Request) {
 
 // DELETE /api/omisiones?contractId=&fecha= (solo admin; no toca días ya creados)
 export async function DELETE(req: Request) {
-  const s = await auth();
-  if ((s?.user as unknown as { rol?: string })?.rol !== "admin")
-    return Response.json({ error: "solo admin" }, { status: 403 });
+  try {
+    await requireRole("admin");
+  } catch (res) {
+    return res as Response;
+  }
   const { searchParams } = new URL(req.url);
   const contractId = searchParams.get("contractId") ?? "";
   const fecha = searchParams.get("fecha") ?? "";
