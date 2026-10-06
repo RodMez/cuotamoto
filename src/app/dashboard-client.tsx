@@ -26,7 +26,10 @@ function useJSON<T>(url: string): T {
   return use(useMemo(() => fetchJSON(url) as Promise<T>, [url]));
 }
 
-class PanelError extends Component<{ children: ReactNode }, { error: Error | null }> {
+class PanelError extends Component<
+  { children: ReactNode; onRetry?: () => void },
+  { error: Error | null }
+> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
     return { error };
@@ -37,7 +40,13 @@ class PanelError extends Component<{ children: ReactNode }, { error: Error | nul
         <div className="card p-6 text-center space-y-2">
           <p className="font-bold">No se pudo cargar</p>
           <p className="text-sm text-red-300">{this.state.error.message}</p>
-          <button className="btn btn-ghost" onClick={() => this.setState({ error: null })}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              this.setState({ error: null });
+              this.props.onRetry?.();
+            }}
+          >
             Reintentar
           </button>
         </div>
@@ -258,7 +267,10 @@ export default function DashboardClient() {
       </div>
 
       {activeId && (
-        <PanelError key={activeId}>
+        <PanelError
+          key={`err-${activeId}`}
+          onRetry={() => setRefreshKey((k) => k + 1)}
+        >
           <Suspense fallback={<PanelCargando texto="Cargando días…" />}>
             <LedgerPanel
               key={`${activeId}:${refreshKey}`}
@@ -271,5 +283,16 @@ export default function DashboardClient() {
         </PanelError>
       )}
     </div>
+  );
+}
+
+export function DashboardRoot() {
+  const [k, setK] = useState(0);
+  return (
+    <PanelError onRetry={() => setK((x) => x + 1)}>
+      <Suspense fallback={<PanelCargando texto="Cargando pagos…" />}>
+        <DashboardClient key={k} />
+      </Suspense>
+    </PanelError>
   );
 }
