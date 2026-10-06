@@ -88,12 +88,25 @@ try {
   await migrate(db, { migrationsFolder: "./drizzle" });
   console.log("[migrate] OK");
 
-  // 2b. Fixups idempotentes de datos (sin cambio de esquema: no van al journal)
-  const normalizados = sqlite
-    .prepare("UPDATE users SET email = lower(email) WHERE email != lower(email)")
-    .run();
-  if (normalizados.changes > 0) {
-    console.log(`[migrate] emails normalizados a minúsculas: ${normalizados.changes}`);
+  // 2b. Fixups idempotentes de datos (sin cambio de esquema: no van al journal).
+  // Si dos emails solo difieren por mayúsculas, normalizar tumbaría el
+  // UNIQUE y abortaría el arranque: se avisa y se omite en vez de fallar.
+  const choques = sqlite
+    .prepare(
+      "SELECT lower(email) AS e, count(*) AS n FROM users WHERE email IS NOT NULL GROUP BY lower(email) HAVING count(*) > 1",
+    )
+    .all();
+  if (choques.length > 0) {
+    console.error(
+      `[migrate] WARN: emails duplicados solo por mayúsculas (${choques.map((c) => c.e).join(", ")}): corrija uno a mano; se omite la normalización`,
+    );
+  } else {
+    const normalizados = sqlite
+      .prepare("UPDATE users SET email = lower(email) WHERE email != lower(email)")
+      .run();
+    if (normalizados.changes > 0) {
+      console.log(`[migrate] emails normalizados a minúsculas: ${normalizados.changes}`);
+    }
   }
 
   // 3. Admin inicial
