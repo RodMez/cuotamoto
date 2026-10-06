@@ -5,6 +5,7 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: file:/app/data/prod.db
+      BACKUP_DIR: /backups
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
       AUTH_URL: ${AUTH_URL}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@cuotamoto.local}
@@ -12,6 +13,7 @@ services:
       TZ: America/Bogota
     volumes:
       - cuotamoto-data:/app/data
+      - cuotamoto-backups:/backups
     restart: unless-stopped
     deploy:
       replicas: 1
@@ -24,3 +26,4 @@ services:
 
 volumes:
   cuotamoto-data:
+  cuotamoto-backups:

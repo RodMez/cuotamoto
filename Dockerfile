@@ -33,11 +33,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL=file:/app/data/prod.db
+ENV BACKUP_DIR=/backups
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV TZ=America/Bogota
 
-RUN mkdir -p /app/data /app/scripts && chown nextjs:nodejs /app/data
+RUN mkdir -p /app/data /app/scripts /backups && chown nextjs:nodejs /app/data /backups
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -52,7 +53,7 @@ RUN chmod +x ./docker-entrypoint.sh
 
 USER nextjs
 
-VOLUME /app/data
+VOLUME /app/data /backups
 EXPOSE 3000
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=60s CMD curl -f http://localhost:3000/api/health || exit 1

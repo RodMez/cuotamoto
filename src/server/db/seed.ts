@@ -1,10 +1,10 @@
-import { db, sqlite } from "./index";
+import { db, getSqlite } from "./index";
 import { users, vehicles, clients, contracts, ledgerDays, payments } from "./schema";
 import bcrypt from "bcryptjs";
 import { uid, nowISO } from "@/lib/utils";
 
 function migrate() {
-  sqlite.exec(`
+  getSqlite().exec(`
   CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, telefono TEXT UNIQUE, password_hash TEXT NOT NULL, rol TEXT NOT NULL DEFAULT 'viewer', created_at TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS vehicles (id TEXT PRIMARY KEY, placa TEXT NOT NULL UNIQUE, alias TEXT, cuota_base INTEGER NOT NULL, activa INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, nombre TEXT NOT NULL, telefono TEXT NOT NULL UNIQUE, documento TEXT, user_id TEXT, created_at TEXT NOT NULL);

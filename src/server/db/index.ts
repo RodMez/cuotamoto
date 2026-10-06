@@ -12,7 +12,8 @@ function resolveDbPath() {
 
 type RealDrizzle = ReturnType<typeof drizzle>;
 
-// En build (Collecting page data) NO abrimos SQLite: evita SIGSEGV en ARM
+// UNA sola conexión compartida por proceso.
+// En build (Collecting page data) NO se abre SQLite: evita SIGSEGV en ARM
 // y evita crear archivos durante `next build`. Las páginas son force-dynamic,
 // así que este dummy nunca se consulta en build.
 function createDummyDb(): RealDrizzle {
@@ -24,29 +25,29 @@ function createDummyDb(): RealDrizzle {
   return drizzle(sqliteStub as unknown as InstanceType<typeof Database>, { schema });
 }
 
-function createRealDb(): RealDrizzle {
-  const dbPath = resolveDbPath();
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const sqlite = new Database(dbPath);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-  return drizzle(sqlite, { schema });
+let handle: InstanceType<typeof Database> | null = null;
+
+function getHandle(): InstanceType<typeof Database> {
+  if (isBuildPhase) {
+    throw new Error("SQLite no disponible durante el build (NEXT_PHASE)");
+  }
+  if (!handle) {
+    const dbPath = resolveDbPath();
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    handle = new Database(dbPath);
+    handle.pragma("journal_mode = WAL");
+    handle.pragma("foreign_keys = ON");
+  }
+  return handle;
 }
 
-// Necesario para seed/scripts que usan `sqlite` directo: solo en runtime.
-function createRealSqlite() {
-  const dbPath = resolveDbPath();
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const sqlite = new Database(dbPath);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-  return sqlite;
-}
+/** drizzle sobre la conexión única. */
+export const db: RealDrizzle = isBuildPhase
+  ? createDummyDb()
+  : drizzle(getHandle(), { schema });
 
-export const db: RealDrizzle = isBuildPhase ? createDummyDb() : createRealDb();
-// `sqlite` solo existe en runtime; en build es un stub tipado como any.
-export const sqlite: InstanceType<typeof Database> = (
-  isBuildPhase ? createDummyDb() as unknown : createRealSqlite()
-) as InstanceType<typeof Database>;
+/** Acceso al handle crudo (backup online, scripts). Misma conexión, no otra. */
+export function getSqlite(): InstanceType<typeof Database> {
+  return getHandle();
+}
