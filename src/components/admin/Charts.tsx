@@ -1,20 +1,6 @@
 "use client";
 import { fmtCOP } from "@/lib/utils";
-
-function points(values: number[], w: number, h: number, pad = 6) {
-  if (values.length === 0) return "";
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const span = max - min || 1;
-  const step = values.length > 1 ? (w - pad * 2) / (values.length - 1) : 0;
-  return values
-    .map((v, i) => {
-      const x = pad + i * step;
-      const y = h - pad - ((v - min) / span) * (h - pad * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-}
+import { barWidthPct, donutGeom, DONUT_R, points, topMax } from "@/lib/chart-math";
 
 export function Spark({ values, stroke = "#3B82F6" }: { values: number[]; stroke?: string }) {
   const w = 120;
@@ -118,7 +104,7 @@ export function TopBars({
   items: { label: string; sub?: string; value: number }[];
   title: string;
 }) {
-  const max = Math.max(...items.map((i) => i.value), 1);
+  const max = topMax(items.map((i) => i.value));
   return (
     <div className="space-y-2">
       <p className="text-sm font-bold">{title}</p>
@@ -135,7 +121,7 @@ export function TopBars({
             <div className="h-2 overflow-hidden rounded-full bg-white/10" role="img" aria-label={`${it.label}: ${fmtCOP(it.value)}`}>
               <div
                 className="h-full rounded-full bg-gradient-to-r from-amber-500 to-red-500"
-                style={{ width: `${Math.max(4, Math.round((it.value / max) * 100))}%` }}
+                style={{ width: `${barWidthPct(it.value, max)}%` }}
               />
             </div>
           </li>
@@ -146,11 +132,8 @@ export function TopBars({
 }
 
 export function Donut({ ok, pend, title }: { ok: number; pend: number; title: string }) {
-  const total = ok + pend || 1;
-  const pPend = Math.round((pend / total) * 100);
-  const R = 34;
-  const C = 2 * Math.PI * R;
-  const off = C * (1 - pend / total);
+  const { total, pPend, C, off } = donutGeom(ok, pend);
+  const R = DONUT_R;
   return (
     <div className="flex items-center gap-3">
       <svg viewBox="0 0 84 84" className="h-20 w-20 shrink-0" role="img" aria-label={`${title}: ${pend} pendientes de ${total}, ${pPend} por ciento`}>

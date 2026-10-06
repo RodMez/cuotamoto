@@ -1,6 +1,14 @@
 "use client";
 import { useState } from "react";
 import { hoyBogota } from "@/lib/utils";
+import {
+  ajustePayload,
+  isValidCliente,
+  isValidMoto,
+  isValidUsuario,
+  motosLibres,
+  puedeAvanzarWizard,
+} from "@/lib/form-valid";
 import type { Cli, Ct, Omi, Veh } from "./types";
 import { Field, Modal } from "./ui";
 import { useToast } from "./Toast";
@@ -18,7 +26,7 @@ export function MotoForm({ onDone }: { onDone: () => void }) {
   const [alias, setAlias] = useState("");
   const [cuota, setCuota] = useState("17000");
   const [busy, setBusy] = useState(false);
-  const valid = placa.trim().length >= 4 && Number(cuota) > 0;
+  const valid = isValidMoto(placa, cuota);
   return (
     <form
       className="grid gap-3 md:grid-cols-[1fr_1fr_140px_auto] md:items-end"
@@ -61,7 +69,7 @@ export function ClienteForm({ onDone }: { onDone: () => void }) {
   const [tel, setTel] = useState("");
   const [doc, setDoc] = useState("");
   const [busy, setBusy] = useState(false);
-  const valid = nombre.trim().length >= 3 && /^[0-9+ ]{7,15}$/.test(tel.trim());
+  const valid = isValidCliente(nombre, tel);
   return (
     <form
       className="grid gap-3 md:grid-cols-[1.4fr_1fr_1fr_auto] md:items-end"
@@ -101,7 +109,7 @@ export function ClienteForm({ onDone }: { onDone: () => void }) {
 
 export function ContratoWizard({ vehs, clis, cts, onDone }: { vehs: Veh[]; clis: Cli[]; cts: Ct[]; onDone: () => void }) {
   const { push } = useToast();
-  const libres = vehs.filter((v) => !cts.some((c) => c.vehicleId === v.id && c.activo === 1));
+  const libres = motosLibres(vehs, cts);
   const [step, setStep] = useState(1);
   const [vehSel, setVehSel] = useState("");
   const [cliSel, setCliSel] = useState("");
@@ -187,7 +195,7 @@ export function ContratoWizard({ vehs, clis, cts, onDone }: { vehs: Veh[]; clis:
         {step < 3 ? (
           <button
             className="btn btn-primary flex-1"
-            disabled={(step === 1 && !vehSel) || (step === 2 && !cliSel)}
+            disabled={!puedeAvanzarWizard(step, vehSel, cliSel)}
             onClick={() => setStep((s) => s + 1)}
           >
             Continuar →
@@ -236,9 +244,7 @@ export function AjusteModal({ cts, vehs, initialId, onClose, onDone }: { cts: Ct
             if (!ct) return;
             setBusy(true);
             try {
-              const body: Record<string, unknown> = { contractId: id };
-              if (saldo !== "") body.saldoInicial = Number(saldo);
-              body.omitirDomingos = ct.omitirDomingos === 1 ? 0 : 1;
+              const body = ajustePayload(id, saldo, ct.omitirDomingos);
               const r = await fetch("/api/contracts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
               if (!r.ok) throw new Error((await r.json()).error ?? "Error");
               push("ok", "Ajuste guardado (deuda recalculada)");
@@ -363,7 +369,7 @@ export function UsuarioForm({ clis, onDone }: { clis: Cli[]; onDone: () => void 
   const [rol, setRol] = useState("conductor");
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
-  const valid = tel.trim().length >= 5 && pass.length >= 4 && (rol !== "conductor" || link);
+  const valid = isValidUsuario(tel, pass, rol, link);
   return (
     <form
       className="grid gap-3 md:grid-cols-[1fr_1fr_160px_1fr_auto] md:items-end"

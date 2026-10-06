@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { hoyBogota } from "@/lib/utils";
+import { buildSerie, buildSnapshot, contractHealth, healthFallback } from "@/lib/admin-snapshot";
 import type { AdminSnapshot, Cli, ContractHealth, Ct, LedgerRow, Veh } from "./types";
 
 async function fetchJSON(url: string, init?: RequestInit) {
@@ -41,32 +42,12 @@ export function useAdminData() {
           try {
             const lj = await fetchJSON(`/api/ledger?contractId=${ct.id}`);
             const ledger: LedgerRow[] = lj.ledger ?? [];
-            const last = ledger[ledger.length - 1];
-            const mes = hoyBogota().slice(0, 7);
-            const recaudoMes = ledger
-              .filter((x) => x.fecha.startsWith(mes))
-              .reduce((a, x) => a + x.totalPagado, 0);
-            const diasPend = ledger.filter((x) => x.estado === "Pendiente").length;
-            const h: ContractHealth = {
-              contractId: ct.id,
-              deuda: last?.deudaAcumulada ?? ct.saldoInicial ?? 0,
-              diasPend,
-              diasTotal: ledger.length,
-              recaudoMes,
-              alDia: diasPend === 0,
-            };
+            const h = contractHealth(ct, ledger, hoyBogota().slice(0, 7));
             return { id: ct.id, health: h, ledger };
           } catch {
             return {
               id: ct.id,
-              health: {
-                contractId: ct.id,
-                deuda: ct.saldoInicial ?? 0,
-                diasPend: 0,
-                diasTotal: 0,
-                recaudoMes: 0,
-                alDia: true,
-              } as ContractHealth,
+              health: healthFallback(ct),
               ledger: [] as LedgerRow[],
             };
           }
@@ -79,18 +60,7 @@ export function useAdminData() {
       setHealthByContract(map);
 
       // Serie 14 días: recaudo diario sumado por fecha
-      const fechas = Array.from(
-        new Set(results.flatMap((r) => r.ledger.map((l) => l.fecha))),
-      ).sort();
-      const last14 = fechas.slice(-14);
-      const serie = last14.map((fecha) => {
-        let recaudo = 0;
-        for (const r of results) {
-          const row = r.ledger.find((l) => l.fecha === fecha);
-          if (row) recaudo += row.totalPagado;
-        }
-        return { fecha, deuda: 0, recaudo };
-      });
+      const serie = buildSerie(results.map((r) => r.ledger));
       setSerieCache(serie);
       setLastUpdated(new Date().toLocaleTimeString("es-CO", { hour12: false }));
     } catch (e) {
@@ -107,43 +77,7 @@ export function useAdminData() {
   }, [refresh]);
 
   const snapshot: AdminSnapshot = useMemo(() => {
-    const contratosActivos = cts.filter((c) => c.activo === 1);
-    const deudaTotal = contratosActivos.reduce((a, c) => a + (healthByContract[c.id]?.deuda ?? c.saldoInicial ?? 0), 0);
-    const diasPendTotal = contratosActivos.reduce((a, c) => a + (healthByContract[c.id]?.diasPend ?? 0), 0);
-    const recaudoMesTotal = contratosActivos.reduce((a, c) => a + (healthByContract[c.id]?.recaudoMes ?? 0), 0);
-    const ocupadasIds = new Set(contratosActivos.map((c) => c.vehicleId));
-    const motosOcupadas = vehs.filter((v) => ocupadasIds.has(v.id));
-    const motosLibres = vehs.filter((v) => !ocupadasIds.has(v.id));
-    const topDeudores = contratosActivos
-      .map((c) => {
-        const v = vehs.find((x) => x.id === c.vehicleId);
-        const cli = clis.find((x) => x.id === c.clientId);
-        const h = healthByContract[c.id];
-        return {
-          contractId: c.id,
-          placa: v?.placa ?? "?",
-          cliente: cli?.nombre ?? "?",
-          deuda: h?.deuda ?? c.saldoInicial ?? 0,
-          diasPend: h?.diasPend ?? 0,
-        };
-      })
-      .filter((x) => x.deuda > 0)
-      .sort((a, b) => b.deuda - a.deuda)
-      .slice(0, 8);
-    return {
-      vehs,
-      clis,
-      cts,
-      healthByContract,
-      deudaTotal,
-      diasPendTotal,
-      recaudoMesTotal,
-      motosLibres,
-      motosOcupadas,
-      contratosActivos,
-      topDeudores,
-      serieDeuda14d: serieCache,
-    };
+    return buildSnapshot({ vehs, clis, cts, healthByContract, serie: serieCache });
   }, [vehs, clis, cts, healthByContract, serieCache]);
 
   return { snapshot, loading, refreshing, error, lastUpdated, refresh };

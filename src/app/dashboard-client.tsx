@@ -3,6 +3,7 @@ import { Component, Suspense, use, useMemo, useState, type ReactNode } from "rea
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { fmtCOP, hoyBogota } from "@/lib/utils";
+import { cuotaPrecargada, ledgerRecientePrimero, panelKpis } from "@/lib/dashboard-math";
 
 type Veh = { id: string; placa: string; alias: string | null; cuotaBase: number };
 type Ct = { id: string; vehicleId: string; clientId: string; fechaInicio: string; saldoInicial: number; omitirDomingos: number };
@@ -76,7 +77,7 @@ function LedgerPanel({
   onMutated: () => void;
 }) {
   const data = useJSON<{ ledger: Row[] }>(`/api/ledger?contractId=${contractId}`);
-  const ledger = useMemo(() => [...(data.ledger ?? [])].reverse(), [data]);
+  const ledger = useMemo(() => ledgerRecientePrimero(data.ledger ?? []), [data]);
   const [fecha, setFecha] = useState(hoyBogota());
   const [cuota, setCuota] = useState<string | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -84,14 +85,12 @@ function LedgerPanel({
   const [metodo, setMetodo] = useState("efectivo");
   const [nota, setNota] = useState("");
   const hoy = hoyBogota();
-  const cuotaVal = cuota ?? String(veh?.cuotaBase ?? 17000);
+  const cuotaVal = cuotaPrecargada(cuota, veh?.cuotaBase);
 
-  const last = ledger[ledger.length - 1];
-  const deuda = last?.deudaAcumulada ?? ct?.saldoInicial ?? 0;
-  const credito = last?.credito ?? 0;
-  const pend = ledger.filter((x) => x.estado === "Pendiente").length;
-  const mes = hoy.slice(0, 7);
-  const recaudo = ledger.filter((x) => x.fecha.startsWith(mes)).reduce((a, x) => a + x.totalPagado, 0);
+  const { deuda, credito, pend, mes, recaudo } = panelKpis(ledger, {
+    saldoInicial: ct?.saldoInicial,
+    hoy,
+  });
 
   async function genDias() {
     try {

@@ -1,5 +1,8 @@
 "use client";
 import { fmtCOP } from "@/lib/utils";
+import { bulletPct } from "@/lib/chart-math";
+
+export { fmtCOPShort } from "@/lib/chart-math";
 
 export function KpiCard({
   label,
@@ -50,12 +53,6 @@ export function KpiCard({
   );
 }
 
-export function fmtCOPShort(v: number) {
-  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `${Math.round(v / 1_000)}k`;
-  return String(v);
-}
-
 export function Bullet({
   label,
   value,
@@ -68,7 +65,7 @@ export function Bullet({
   format?: (v: number) => string;
 }) {
   const f = format ?? fmtCOP;
-  const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
+  const pct = bulletPct(value, target);
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between gap-2 text-sm">
