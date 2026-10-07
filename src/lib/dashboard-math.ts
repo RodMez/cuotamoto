@@ -15,17 +15,15 @@ export function ledgerRecientePrimero<T>(ledger: T[]): T[] {
 }
 
 /**
- * KPIs del panel (réplica exacta de LedgerPanel):
- * - last = ÚLTIMO de la lista YA invertida (día más viejo) — comportamiento
- *   actual, probablemente bug (debería ser el día más reciente). Congelado
- *   con test; cambiar solo a conciencia.
+ * KPIs del panel. Recibe el ledger YA invertido (reciente primero).
+ * deuda/crédito salen del día MÁS RECIENTE ([0]); pend/recaudo recorren todo.
  */
 export function panelKpis(
   ledgerReciente: PanelRow[],
   opts: { saldoInicial?: number; hoy?: string } = {},
 ) {
   const hoy = opts.hoy ?? hoyBogota();
-  const last = ledgerReciente[ledgerReciente.length - 1];
+  const last = ledgerReciente[0];
   const deuda = last?.deudaAcumulada ?? opts.saldoInicial ?? 0;
   const credito = last?.credito ?? 0;
   const pend = ledgerReciente.filter((x) => x.estado === "Pendiente").length;

@@ -38,7 +38,7 @@ describe("panelKpis", () => {
     expect(panelKpis([], { saldoInicial: 5000 }).deuda).toBe(5000);
   });
 
-  it("deuda/crédito salen del ÚLTIMO de la lista invertida = día más viejo (actual)", () => {
+  it("deuda/crédito salen del día MÁS RECIENTE (primero de la lista invertida)", () => {
     // Lista YA invertida (reciente primero): [día3, día2, día1]
     const reciente = [
       fila({ fecha: "2026-10-03", deudaAcumulada: 3000, estado: "Pendiente", totalPagado: 0 }),
@@ -46,11 +46,22 @@ describe("panelKpis", () => {
       fila({ fecha: "2026-10-01", deudaAcumulada: 1000, credito: 0, estado: "Al día", totalPagado: 17000 }),
     ];
     const k = panelKpis(reciente, { hoy: "2026-10-15" });
-    expect(k.deuda).toBe(1000); // día más viejo, no el reciente (ver nota en dashboard-math.ts)
+    expect(k.deuda).toBe(3000); // el día más reciente, no el más viejo
     expect(k.pend).toBe(2);
     expect(k.mes).toBe("2026-10");
     expect(k.recaudo).toBe(0 + 5000 + 17000);
     expect(k.total).toBe(3);
+  });
+
+  it("crédito a favor también viene del día más reciente", () => {
+    const reciente = [
+      fila({ fecha: "2026-10-02", deudaAcumulada: 0, credito: 33000, estado: "Al día" }),
+      fila({ fecha: "2026-10-01", deudaAcumulada: 17000, estado: "Pendiente" }),
+    ];
+    expect(panelKpis(reciente, { hoy: "2026-10-02" })).toMatchObject({
+      deuda: 0,
+      credito: 33000,
+    });
   });
 
   it("recaudo filtra por mes del hoy dado", () => {
