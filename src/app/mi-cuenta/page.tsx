@@ -29,6 +29,10 @@ export default async function MiCuenta() {
   const last = ledger[ledger.length - 1];
   const deuda = last?.deudaAcumulada ?? ct.saldoInicial ?? 0;
   const credito = last?.credito ?? 0;
+  const saldoInicial = ct.saldoInicial ?? 0;
+  const totalCuotas = ledger.reduce((a, r) => a + r.cuotaDia, 0);
+  const totalPagos = ledger.reduce((a, r) => a + r.totalPagado, 0);
+  const diasExentos = ledger.filter((r) => r.exento).length;
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4 w-full">
@@ -40,11 +44,46 @@ export default async function MiCuenta() {
         <p className={`badge mt-2 ${deuda <= 0 ? "badge-ok" : "badge-pend"}`}>{deuda <= 0 ? "✓ Al día" : "● Pendiente"}</p>
       </div>
       <div className="card p-4">
+        <h2 className="font-bold mb-2">Desglose</h2>
+        <div className="text-sm space-y-2">
+          {saldoInicial > 0 && (
+            <div className="flex justify-between py-1 border-b border-white/5">
+              <span className="text-slate-300">Saldo inicial</span>
+              <span className="font-mono-num">+{fmtCOP(saldoInicial)}</span>
+            </div>
+          )}
+          <div className="flex justify-between py-1 border-b border-white/5">
+            <span className="text-slate-300">
+              Cuotas ({ledger.length} día{ledger.length === 1 ? "" : "s"}
+              {diasExentos > 0 ? ` · ${diasExentos} exento${diasExentos === 1 ? "" : "s"}` : ""})
+            </span>
+            <span className="font-mono-num">+{fmtCOP(totalCuotas)}</span>
+          </div>
+          <div className="flex justify-between py-1 border-b border-white/5">
+            <span className="text-slate-300">Pagos recibidos</span>
+            <span className="font-mono-num text-emerald-300">−{fmtCOP(totalPagos)}</span>
+          </div>
+          <div className="flex justify-between py-1 font-bold">
+            <span>DEBES HOY</span>
+            <span className="font-mono-num">{fmtCOP(deuda)}</span>
+          </div>
+          {credito > 0 && (
+            <p className="text-sm text-emerald-300">Tienes {fmtCOP(credito)} a favor para los próximos días</p>
+          )}
+        </div>
+      </div>
+      <div className="card p-4">
         <h2 className="font-bold mb-2">Historial</h2>
         {ledger.slice().reverse().slice(0, 30).map((r) => (
-          <div key={r.diaSeq} className="flex justify-between py-2 border-b border-white/5 text-sm">
-            <span>Día {r.diaSeq} · {r.fecha}</span>
-            <span className="font-mono-num">{fmtCOP(r.totalPagado)} / {fmtCOP(r.cuotaDia)}</span>
+          <div key={r.diaSeq} className="py-2 border-b border-white/5 text-sm">
+            <div className="flex justify-between">
+              <span>Día {r.diaSeq} · {r.fecha}</span>
+              <span className="font-mono-num">{fmtCOP(r.totalPagado)} / {fmtCOP(r.cuotaDia)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-slate-400 mt-0.5">
+              <span>{r.exento ? `Exento${r.motivo ? ` — ${r.motivo}` : ""}` : ""}</span>
+              <span className="font-mono-num ml-auto">Deuda tras el día: {fmtCOP(r.deudaAcumulada)}</span>
+            </div>
           </div>
         ))}
       </div>
