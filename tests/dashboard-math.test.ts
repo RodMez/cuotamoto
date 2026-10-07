@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cuotaPrecargada,
   ledgerRecientePrimero,
+  ordenarContratosPorDeuda,
   panelKpis,
   type PanelRow,
 } from "@/lib/dashboard-math";
@@ -78,5 +79,22 @@ describe("cuotaPrecargada", () => {
     expect(cuotaPrecargada(null, 25000)).toBe("25000");
     expect(cuotaPrecargada(null, undefined)).toBe("17000");
     expect(cuotaPrecargada("20000", 25000)).toBe("20000");
+  });
+});
+
+describe("ordenarContratosPorDeuda", () => {
+  const cts = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  it("mayor deuda primero; sin datos conserva el orden", () => {
+    expect(ordenarContratosPorDeuda(cts, { a: 1000, b: 50000, c: 0 }).map((c) => c.id)).toEqual([
+      "b",
+      "a",
+      "c",
+    ]);
+    expect(ordenarContratosPorDeuda(cts, {})).toEqual(cts);
+  });
+  it("empate por etiqueta (placa) y no muta el original", () => {
+    const out = ordenarContratosPorDeuda(cts, { a: 5, b: 5, c: 5 }, (c) => c.id);
+    expect(out.map((c) => c.id)).toEqual(["a", "b", "c"]);
+    expect(cts.map((c) => c.id)).toEqual(["a", "b", "c"]);
   });
 });

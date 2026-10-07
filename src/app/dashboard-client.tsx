@@ -3,7 +3,7 @@ import { Component, Suspense, use, useMemo, useState, type ReactNode } from "rea
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { fmtCOP, hoyBogota } from "@/lib/utils";
-import { cuotaPrecargada, ledgerRecientePrimero, panelKpis } from "@/lib/dashboard-math";
+import { cuotaPrecargada, ledgerRecientePrimero, ordenarContratosPorDeuda, panelKpis } from "@/lib/dashboard-math";
 
 type Veh = { id: string; placa: string; alias: string | null; cuotaBase: number };
 type Ct = { id: string; vehicleId: string; clientId: string; fechaInicio: string; saldoInicial: number; omitirDomingos: number };
@@ -14,10 +14,15 @@ type Row = {
   totalPagado: number; deudaAcumulada: number; credito: number; creditoUsado: number;
   estado: string; pagos: Pago[];
 };
-type Base = { vehicles: Veh[]; contracts: Ct[]; clients: Cli[] };
+type Base = { rol?: string; vehicles: Veh[]; contracts: Ct[]; clients: Cli[] };
 
 async function fetchJSON(url: string, init?: RequestInit) {
-  const r = await fetch(url, init);
+  let r: Response;
+  try {
+    r = await fetch(url, init);
+  } catch {
+    throw new Error("Sin conexión, reintenta");
+  }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j?.error ?? `Error ${r.status}`);
   return j;
@@ -43,6 +48,40 @@ function useJSON<T>(url: string): T {
 /** Invalida una URL cacheada (llamar antes de remontar tras una mutación). */
 function evictJSON(url: string) {
   promiseCache.delete(url);
+}
+
+/**
+ * Deuda por contrato para ordenar tabs (peor primero). Una sola promesa
+ * cacheada; se invalida con refreshKey tras mutar.
+ */
+function useDeudas(ids: string[], refreshKey: number): Record<string, number> {
+  const key = `deudas:${[...ids].sort().join(",")}:${refreshKey}`;
+  for (const k of [...promiseCache.keys()]) {
+    if (k.startsWith("deudas:") && k !== key) promiseCache.delete(k);
+  }
+  let p = promiseCache.get(key);
+  if (!p) {
+    p = (async () => {
+      const out: Record<string, number> = {};
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const j = await fetchJSON(`/api/ledger?contractId=${id}`);
+            const rows = (j.ledger ?? []) as { deudaAcumulada: number }[];
+            out[id] = rows.length ? rows[rows.length - 1].deudaAcumulada : 0;
+          } catch {
+            out[id] = 0;
+          }
+        }),
+      );
+      return out;
+    })();
+    promiseCache.set(key, p);
+    p.catch(() => {
+      if (promiseCache.get(key) === p) promiseCache.delete(key);
+    });
+  }
+  return use(p as Promise<Record<string, number>>);
 }
 
 class PanelError extends Component<
@@ -103,6 +142,7 @@ function LedgerPanel({
   const [monto, setMonto] = useState("");
   const [metodo, setMetodo] = useState("efectivo");
   const [nota, setNota] = useState("");
+  const [aviso, setAviso] = useState<string | null>(null);
   const hoy = hoyBogota();
   const cuotaVal = cuotaPrecargada(cuota, veh?.cuotaBase);
 
@@ -134,6 +174,7 @@ function LedgerPanel({
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contractId, monto: Number(monto), metodo, nota: nota || undefined }),
       });
+      setAviso(`Pago registrado ✓ ${fmtCOP(Number(monto))} · ${hoy}`);
       setMonto("");
       setNota("");
       setModalAbierto(false);
@@ -160,15 +201,21 @@ function LedgerPanel({
         <div className="card p-4"><p className="text-xs text-slate-400">DEUDA TOTAL</p><p className="font-mono-num text-xl font-bold">{fmtCOP(deuda)}</p>{credito > 0 && <p className="text-xs text-emerald-300">a favor: {fmtCOP(credito)}</p>}</div>
         <div className="card p-4"><p className="text-xs text-slate-400">DÍAS PENDIENTES</p><p className="font-mono-num text-xl font-bold">{pend}/{ledger.length}</p></div>
         <div className="card p-4"><p className="text-xs text-slate-400">RECAUDO {mes}</p><p className="font-mono-num text-xl font-bold">{fmtCOP(recaudo)}</p></div>
-        <button className="btn btn-accent text-lg font-bold" onClick={() => { setMonto(""); setModalAbierto(true); }}>+ Abonar hoy</button>
+        <button className="btn btn-accent min-h-[44px] text-lg font-bold" onClick={() => { setMonto(""); setAviso(null); setModalAbierto(true); }}>+ Abonar hoy</button>
       </div>
 
       <div className="card p-4 flex flex-wrap gap-2 items-end">
         <div><label className="text-xs">Generar días hasta</label><input className="input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
         <div><label className="text-xs">Cuota (si crea nuevo)</label><input className="input font-mono-num" value={cuotaVal} onChange={(e) => setCuota(e.target.value)} /></div>
-        <button className="btn btn-accent" onClick={genDias}>+ Generar días</button>
+        <button className="btn btn-accent min-h-[44px]" onClick={genDias}>+ Generar días</button>
         <p className="text-xs text-slate-400 w-full">Crea los faltantes hasta la fecha (respeta domingos y omisiones). Al registrar un pago el día se crea solo si falta.</p>
       </div>
+
+      {aviso && (
+        <div className="card p-3 border border-emerald-500/40 text-sm text-emerald-300" role="status">
+          {aviso}
+        </div>
+      )}
 
       <div className="card overflow-x-auto">
         {ledger.length === 0 ? (
@@ -193,7 +240,7 @@ function LedgerPanel({
                       {r.pagos.map((p) => (
                         <div key={p.id} className="flex gap-2 items-center">
                           <span>{fmtCOP(p.monto)} {p.metodo}{p.nota ? ` · ${p.nota}` : ""}</span>
-                          <button className="text-red-300 hover:text-red-200" title="Borrar pago (admin)" onClick={() => borrarPago(p.id)}>×</button>
+                          <button className="text-red-300 hover:text-red-200 min-w-[44px] min-h-[44px]" title="Borrar pago (admin)" onClick={() => borrarPago(p.id)}>×</button>
                         </div>
                       ))}
                     </div>
@@ -214,6 +261,16 @@ function LedgerPanel({
           <div className="card p-6 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-bold text-lg">Abonar hoy — {hoy}</h2>
             <p className="text-xs text-slate-400">Se aplica al día de hoy ({hoy}).</p>
+            <div className="flex gap-2">
+              <button type="button" className="btn btn-ghost min-h-[44px] flex-1 text-sm" onClick={() => setMonto(String(veh?.cuotaBase ?? 17000))}>
+                Cuota {fmtCOP(veh?.cuotaBase ?? 17000)}
+              </button>
+              {deuda > 0 && (
+                <button type="button" className="btn btn-ghost min-h-[44px] flex-1 text-sm" onClick={() => setMonto(String(deuda))}>
+                  Deuda {fmtCOP(deuda)}
+                </button>
+              )}
+            </div>
             <div><label className="text-xs">Monto COP</label><input className="input font-mono-num" placeholder="17000" value={monto} onChange={(e) => setMonto(e.target.value)} /></div>
             <div><label className="text-xs">Método</label>
               <select className="input" value={metodo} onChange={(e) => setMetodo(e.target.value)}>
@@ -222,8 +279,8 @@ function LedgerPanel({
             </div>
             <div><label className="text-xs">Nota (opcional)</label><input className="input" placeholder="..." value={nota} onChange={(e) => setNota(e.target.value)} /></div>
             <div className="flex gap-2">
-              <button className="btn btn-accent flex-1" onClick={registrarPago}>Guardar pago</button>
-              <button className="btn btn-ghost" onClick={() => setModalAbierto(false)}>Cerrar</button>
+              <button className="btn btn-accent min-h-[44px] flex-1" onClick={registrarPago}>Guardar pago</button>
+              <button className="btn btn-ghost min-h-[44px]" onClick={() => setModalAbierto(false)}>Cerrar</button>
             </div>
           </div>
         </div>
@@ -234,12 +291,19 @@ function LedgerPanel({
 
 export default function DashboardClient() {
   const base = useJSON<Base>("/api/vehicles");
-  const vehs = base.vehicles ?? [];
-  const cts = base.contracts ?? [];
-  const clis = base.clients ?? [];
+  const vehs = useMemo(() => base.vehicles ?? [], [base]);
+  const cts = useMemo(() => base.contracts ?? [], [base]);
+  const clis = useMemo(() => base.clients ?? [], [base]);
+  const esAdmin = base.rol === "admin";
   const [contractId, setContractId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const ct = cts.find((c) => c.id === contractId) ?? cts[0];
+  const ids = useMemo(() => cts.map((c) => c.id), [cts]);
+  const deudas = useDeudas(ids, refreshKey);
+  const tabs = useMemo(
+    () => ordenarContratosPorDeuda(cts, deudas, (c) => vehs.find((v) => v.id === c.vehicleId)?.placa ?? c.id),
+    [cts, deudas, vehs],
+  );
+  const ct = tabs.find((c) => c.id === contractId) ?? tabs[0];
   const activeId = ct?.id ?? null;
   const veh = vehs.find((v) => v.id === ct?.vehicleId);
   const cli = clis.find((c) => c.id === ct?.clientId);
@@ -269,18 +333,18 @@ export default function DashboardClient() {
           </p>
         </div>
         <nav className="flex gap-2 text-sm">
-          <Link className="btn btn-ghost" href="/pendientes">Pendientes</Link>
-          <Link className="btn btn-ghost" href="/admin">Admin</Link>
-          <button className="btn btn-ghost" onClick={() => signOut({ callbackUrl: "/login" })}>Salir</button>
+          <Link className="btn btn-ghost min-h-[44px]" href="/pendientes">Pendientes</Link>
+          {esAdmin && <Link className="btn btn-ghost min-h-[44px]" href="/admin">Admin</Link>}
+          <button className="btn btn-ghost min-h-[44px]" onClick={() => signOut({ callbackUrl: "/login" })}>Salir</button>
         </nav>
       </header>
 
       <div className="flex gap-2 flex-wrap">
-        {cts.map((c) => {
+        {tabs.map((c) => {
           const v = vehs.find((x) => x.id === c.vehicleId);
           return (
             <button key={c.id} onClick={() => setContractId(c.id)}
-              className={`btn ${c.id === activeId ? "btn-primary" : "btn-ghost"}`}>
+              className={`btn min-h-[44px] ${c.id === activeId ? "btn-primary" : "btn-ghost"}`}>
               {v?.placa ?? c.id.slice(0, 6)}
             </button>
           );

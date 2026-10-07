@@ -38,3 +38,22 @@ export function panelKpis(
 export function cuotaPrecargada(cuota: string | null, cuotaBase?: number): string {
   return cuota ?? String(cuotaBase ?? 17000);
 }
+
+/**
+ * Tabs de contratos ordenados para cobrar: mayor deuda primero.
+ * Sin dato de deuda (aún cargando) conserva el orden original.
+ */
+export function ordenarContratosPorDeuda<T extends { id: string }>(
+  cts: T[],
+  deudas: Record<string, number>,
+  etiqueta?: (c: T) => string,
+): T[] {
+  if (Object.keys(deudas).length === 0) return cts;
+  return [...cts].sort((a, b) => {
+    const d = (deudas[b.id] ?? 0) - (deudas[a.id] ?? 0);
+    if (d !== 0) return d;
+    const ea = etiqueta ? etiqueta(a) : a.id;
+    const eb = etiqueta ? etiqueta(b) : b.id;
+    return ea.localeCompare(eb);
+  });
+}

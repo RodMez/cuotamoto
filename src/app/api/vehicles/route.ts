@@ -19,12 +19,13 @@ export async function GET() {
     const myCts = cts.filter((c) => c.clientId === myClient?.id);
     const myVehIds = new Set(myCts.map((c) => c.vehicleId));
     return Response.json({
+      rol: me.rol,
       vehicles: vehs.filter((v) => myVehIds.has(v.id)),
       contracts: myCts,
       clients: myClient ? [myClient] : [],
     });
   }
-  return Response.json({ vehicles: vehs, contracts: cts, clients: clis });
+  return Response.json({ rol: me.rol, vehicles: vehs, contracts: cts, clients: clis });
 }
 
 export async function POST(req: Request) {
