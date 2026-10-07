@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   const veh = await db.select().from(vehicles).where(eq(vehicles.id, vehicleId));
   if (!veh[0]) return Response.json({ error: "moto no existe" }, { status: 404 });
   const cli = await db.select().from(clients).where(eq(clients.id, clientId));
-  if (!cli[0]) return Response.json({ error: "cliente no existe" }, { status: 404 });
+  if (!cli[0]) return Response.json({ error: "el conductor no existe" }, { status: 404 });
 
   const row = {
     id: uid(),

@@ -23,13 +23,13 @@ Control de pagos del alquiler de motos con **cuota diaria variable**. Tabla esti
 ## Usuarios (tab Admin → Usuarios)
 
 - **Desactivar** es la baja normal: bloquea el acceso al instante (el token
-  vivo recibe 401) y conserva pagos, auditoría y link al cliente. Reactivar
+  vivo recibe 401) y conserva pagos, auditoría y link al conductor. Reactivar
   lo devuelve todo.
 - **Borrar** solo sin historial (`audit_log` ni `payments.created_by`);
   si lo tiene, 409 "tiene historial, desactívalo".
 - Guards: no a ti mismo, nunca al último admin activo (contado en la misma tx).
 - Restablecer clave sube `tokenVersion`: las sesiones viejas mueren al instante.
-- Conductor requiere link a cliente; un cliente linkeado a otro da 409.
+- Conductor requiere link a su ficha; una ficha linkeada a otro da 409.
 
 ## Desarrollo local
 

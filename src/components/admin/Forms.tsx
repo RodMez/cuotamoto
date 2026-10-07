@@ -105,7 +105,7 @@ export function ClienteForm({ onDone }: { onDone: () => void }) {
         setBusy(true);
         try {
           await post("/api/clients", { nombre, telefono: tel, documento: doc || undefined });
-          push("ok", `Cliente ${nombre} creado`);
+          push("ok", `Conductor ${nombre} creado`);
           setNombre("");
           setTel("");
           setDoc("");
@@ -127,7 +127,7 @@ export function ClienteForm({ onDone }: { onDone: () => void }) {
         <input className="input font-mono-num" value={doc} onChange={(e) => setDoc(e.target.value)} />
       </Field>
       <button className="btn btn-primary" disabled={!valid || busy}>
-        {busy ? "Guardando…" : "+ Crear cliente"}
+        {busy ? "Guardando…" : "+ Crear conductor"}
       </button>
     </form>
   );
@@ -170,7 +170,7 @@ export function ContratoWizard({ vehs, clis, cts, onDone }: { vehs: Veh[]; clis:
         {[1, 2, 3].map((n) => (
           <li key={n} className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 ${step === n ? "border-blue-500/50 bg-blue-500/10" : "border-white/10"}`}>
             <span className={`grid h-5 w-5 place-items-center rounded-full text-[11px] ${step >= n ? "bg-blue-600 text-white" : "bg-white/10"}`}>{n}</span>
-            {n === 1 ? "Moto libre" : n === 2 ? "Cliente" : "Fechas y saldo"}
+            {n === 1 ? "Moto libre" : n === 2 ? "Conductor" : "Fechas y saldo"}
           </li>
         ))}
       </ol>
@@ -187,7 +187,7 @@ export function ContratoWizard({ vehs, clis, cts, onDone }: { vehs: Veh[]; clis:
         </Field>
       )}
       {step === 2 && (
-        <Field label={`Cliente (${clis.length})`}>
+        <Field label={`Conductor (${clis.length})`}>
           <select className="input" value={cliSel} onChange={(e) => setCliSel(e.target.value)}>
             <option value="">Selecciona…</option>
             {clis.map((c) => (
@@ -438,7 +438,7 @@ export function UsuarioForm({ clis, onDone }: { clis: Cli[]; onDone: () => void 
         </select>
       </Field>
       {rol === "conductor" ? (
-        <Field label="Link a cliente *">
+        <Field label="Link a conductor *">
           <select className="input" value={link} onChange={(e) => setLink(e.target.value)}>
             <option value="">Selecciona…</option>
             {clis.map((c) => (
@@ -522,7 +522,7 @@ export function UserEditModal({
           </select>
         </Field>
         {rol === "conductor" && (
-          <Field label="Cliente linkeado" hint="el conductor solo ve la deuda de este cliente">
+          <Field label="Conductor linkeado" hint="el conductor solo ve la deuda de este conductor">
             <select className="input" value={link} onChange={(e) => setLink(e.target.value)}>
               <option value="">Sin link</option>
               {clis.map((c) => (

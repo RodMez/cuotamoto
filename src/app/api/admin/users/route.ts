@@ -154,11 +154,11 @@ export async function PATCH(req: Request) {
       linkear = null;
     } else {
       if (rolFinal !== "conductor")
-        return Response.json({ error: "solo un conductor puede linkearse a un cliente" }, { status: 400 });
+        return Response.json({ error: "solo un conductor puede vincularse" }, { status: 400 });
       const clis = await db.select().from(clients).where(eq(clients.id, clientId));
-      if (!clis[0]) return Response.json({ error: "cliente no existe" }, { status: 404 });
+      if (!clis[0]) return Response.json({ error: "el conductor no existe" }, { status: 404 });
       if (clis[0].userId && clis[0].userId !== target.id)
-        return Response.json({ error: "ese cliente ya está linkeado a otro usuario" }, { status: 409 });
+        return Response.json({ error: "ese conductor ya está vinculado a otro usuario" }, { status: 409 });
       linkear = clientId;
     }
   }

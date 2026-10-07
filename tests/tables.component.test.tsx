@@ -96,11 +96,11 @@ describe("ClientsTable", () => {
   it("pagina de 10 en 10 con contador", async () => {
     const user = userEvent.setup();
     render(<ClientsTable clis={clis} cts={[]} loading={false} query="" />);
-    expect(screen.getByText("1/2 · 11 clientes")).toBeInTheDocument();
+    expect(screen.getByText("1/2 · 11 conductores")).toBeInTheDocument();
     expect(screen.getByText("Cliente A")).toBeInTheDocument();
     expect(screen.queryByText("Cliente K")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "→" }));
-    expect(screen.getByText("2/2 · 11 clientes")).toBeInTheDocument();
+    expect(screen.getByText("2/2 · 11 conductores")).toBeInTheDocument();
     expect(screen.getByText("Cliente K")).toBeInTheDocument();
     expect(screen.queryByText("Cliente A")).not.toBeInTheDocument();
   });
@@ -121,7 +121,7 @@ describe("ClientsTable", () => {
 
   it("vacío muestra Empty", () => {
     render(<ClientsTable clis={[]} cts={[]} loading={false} query="" />);
-    expect(screen.getByText("Sin clientes")).toBeInTheDocument();
+    expect(screen.getByText("Sin conductores")).toBeInTheDocument();
   });
 });
 

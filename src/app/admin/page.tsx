@@ -31,7 +31,7 @@ type Tab = "overview" | "motos" | "clientes" | "contratos" | "omisiones" | "usua
 const TABS: { id: Tab; label: string; icon: React.ReactNode; hint: string }[] = [
   { id: "overview", label: "Resumen", icon: <LayoutDashboard size={16} />, hint: "KPIs, deuda y recaudo" },
   { id: "motos", label: "Motos", icon: <Bike size={16} />, hint: "Flota y cuota base" },
-  { id: "clientes", label: "Clientes", icon: <Users size={16} />, hint: "Conductores reales" },
+  { id: "clientes", label: "Conductores", icon: <Users size={16} />, hint: "Conductores reales" },
   { id: "contratos", label: "Contratos", icon: <FileText size={16} />, hint: "1 activo por moto" },
   { id: "omisiones", label: "Omisiones", icon: <CalendarX size={16} />, hint: "Taller y exentos" },
   { id: "usuarios", label: "Usuarios", icon: <UserPlus size={16} />, hint: "Accesos por rol" },
@@ -110,7 +110,7 @@ function AdminInner() {
             <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               className="input !min-h-[36px] !pl-8 !text-[13px]"
-              placeholder="Buscar placa, cliente…"
+              placeholder="Buscar placa, conductor…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-label="Búsqueda global"
@@ -245,7 +245,7 @@ function AdminInner() {
                       + Moto
                     </button>
                     <button className="btn btn-primary !text-[13px]" onClick={() => setTab("clientes")}>
-                      + Cliente
+                      + Conductor
                     </button>
                     <button className="btn btn-accent !text-[13px]" onClick={() => setTab("contratos")}>
                       + Contrato
@@ -254,7 +254,7 @@ function AdminInner() {
                       Omitir día
                     </button>
                   </div>
-                  <p className="text-xs text-slate-500">Flujo producción: 1 moto → 2 cliente → 3 contrato → 4 usuario. Sin demos.</p>
+                  <p className="text-xs text-slate-500">Flujo producción: 1 moto → 2 conductor → 3 contrato → 4 usuario. Sin demos.</p>
                 </div>
                 <div className="card card-pad">
                   <div className="mb-2 flex items-center justify-between">
@@ -298,12 +298,12 @@ function AdminInner() {
         {tab === "clientes" && (
           <section className="grid gap-3 lg:grid-cols-12">
             <div className="card card-pad lg:col-span-7">
-              <h2 className="mb-2 text-sm font-bold">Clientes ({snapshot.clis.length})</h2>
+              <h2 className="mb-2 text-sm font-bold">Conductores ({snapshot.clis.length})</h2>
               <ClientsTable clis={snapshot.clis} cts={snapshot.cts} loading={loading} query={query} />
             </div>
             <div className="space-y-3 lg:col-span-5">
               <div className="card card-pad space-y-3">
-                <h2 className="text-sm font-bold">2 · Nuevo cliente</h2>
+                <h2 className="text-sm font-bold">2 · Nuevo conductor</h2>
                 <ClienteForm onDone={() => void refresh(true)} />
               </div>
               <div className="card card-pad text-xs leading-relaxed text-slate-400">
@@ -394,7 +394,7 @@ function AdminInner() {
               <p className="text-sm font-bold text-slate-200">Roles</p>
               <p><span className="font-mono-num text-slate-200">admin</span> · todo, ajustes y omisiones.</p>
               <p><span className="font-mono-num text-slate-200">cobrador</span> · cobra y genera días (no futuro).</p>
-              <p><span className="font-mono-num text-slate-200">conductor</span> · entra con teléfono, solo ve su deuda (requiere link a cliente).</p>
+              <p><span className="font-mono-num text-slate-200">conductor</span> · entra con teléfono, solo ve su deuda (requiere link a conductor).</p>
               <p><span className="font-mono-num text-slate-200">viewer</span> · lectura global.</p>
               <p>Desactivar bloquea el acceso al instante. Borrar solo funciona sin historial.</p>
             </div>
@@ -403,9 +403,9 @@ function AdminInner() {
 
         <footer className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
           <span>
-            Deuda = max(0, anterior + cuota − pagos), arranca en saldo inicial. Cada pago queda fechado el día que se hizo.
+            Saldo corrido desde el saldo inicial. Todo pago se aplica al día de hoy.
           </span>
-          <span className="font-mono-num">/admin · {snapshot.vehs.length} motos · {snapshot.clis.length} clientes</span>
+          <span className="font-mono-num">/admin · {snapshot.vehs.length} motos · {snapshot.clis.length} conductores</span>
         </footer>
       </main>
 

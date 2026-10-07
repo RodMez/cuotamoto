@@ -45,6 +45,6 @@ sqlite3 /app/data/prod.db ".backup '/app/data/backups/prod-$(date +%F).db'"
 El volumen `cuotamoto-data` ya persiste. Descarga backups desde Volumes o S3 en V2.
 
 ## 5. Crear conductor con login
-1. Admin → crea usuario rol `conductor`, teléfono `300...`, clave.
-2. En DB linkea `clients.userId`: por ahora crea el cliente con mismo teléfono y luego en terminal sqlite: `UPDATE clients SET user_id='<userId>' WHERE telefono='300...';`
-V2: UI para linkear directo.
+1. Admin → tab Conductores → crea la ficha del conductor (nombre + teléfono).
+2. Admin → tab Usuarios → crea usuario rol `conductor` con ese teléfono y clave.
+3. Edita el usuario y vincúlalo a su ficha (select de conductor). Sin vínculo, `/mi-cuenta` muestra "Sin contrato".

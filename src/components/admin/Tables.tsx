@@ -116,7 +116,7 @@ export function ClientsTable({ clis, cts, loading, query }: { clis: Cli[]; cts: 
   const view = rows.slice(page * per, page * per + per);
 
   if (loading) return <SkeletonRows n={5} />;
-  if (rows.length === 0) return <Empty title="Sin clientes" hint="Crea el conductor real con nombre y teléfono." />;
+  if (rows.length === 0) return <Empty title="Sin conductores" hint="Crea el conductor real con nombre y teléfono." />;
   return (
     <div className="space-y-2">
       <div className="overflow-x-auto scroll-thin">
@@ -143,9 +143,9 @@ export function ClientsTable({ clis, cts, loading, query }: { clis: Cli[]; cts: 
       </div>
       {pages > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">
-            {page + 1}/{pages} · {rows.length} clientes
-          </span>
+            <span className="text-slate-400">
+              {page + 1}/{pages} · {rows.length} conductores
+            </span>
           <div className="flex gap-2">
             <button className="btn btn-ghost !min-h-[36px]" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
               ←
@@ -194,13 +194,13 @@ export function ContractsTable({
   }, [cts, vehs, clis, health, query, filter]);
 
   if (loading) return <SkeletonRows n={5} />;
-  if (rows.length === 0) return <Empty title="Sin contratos" hint="Usa el wizard: moto libre + cliente + fecha de inicio." />;
+  if (rows.length === 0) return <Empty title="Sin contratos" hint="Usa el wizard: moto libre + conductor + fecha de inicio." />;
   return (
     <div className="overflow-x-auto scroll-thin">
       <table className="dense w-full min-w-[720px]">
         <thead className="sticky top-0 bg-[#101a34]">
           <tr>
-            <th>Moto / Cliente</th>
+            <th>Moto / Conductor</th>
             <th>Inicio</th>
             <th>Saldo inicial</th>
             <th>Domingos</th>
@@ -279,7 +279,7 @@ export function UsersTable({
             <th>Teléfono</th>
             <th>Rol</th>
             <th>Estado</th>
-            <th>Cliente</th>
+            <th>Vinculado a</th>
             <th></th>
           </tr>
         </thead>
