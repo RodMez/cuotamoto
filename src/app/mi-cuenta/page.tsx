@@ -5,6 +5,7 @@ import { db } from "@/server/db";
 import { contracts, clients } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import { getLedger } from "@/server/db/ledger";
+import { LedgerTable } from "@/components/ledger-table";
 import { fmtCOP } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -26,13 +27,12 @@ export default async function MiCuenta() {
   const ct = cts.find((c) => c.activo === 1) ?? cts[0];
   if (!ct) return <div className="p-8">Sin contrato activo.</div>;
   const ledger = await getLedger(ct.id);
+  const reciente = [...ledger].reverse();
   const last = ledger[ledger.length - 1];
   const deuda = last?.deudaAcumulada ?? ct.saldoInicial ?? 0;
   const credito = last?.credito ?? 0;
   const saldoInicial = ct.saldoInicial ?? 0;
-  const totalCuotas = ledger.reduce((a, r) => a + r.cuotaDia, 0);
-  const totalPagos = ledger.reduce((a, r) => a + r.totalPagado, 0);
-  const diasExentos = ledger.filter((r) => r.exento).length;
+  const diasPend = ledger.filter((r) => r.estado === "Pendiente").length;
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4 w-full">
@@ -43,49 +43,21 @@ export default async function MiCuenta() {
         {credito > 0 && <p className="text-sm text-emerald-300">Tienes {fmtCOP(credito)} a favor</p>}
         <p className={`badge mt-2 ${deuda <= 0 ? "badge-ok" : "badge-pend"}`}>{deuda <= 0 ? "✓ Al día" : "● Pendiente"}</p>
       </div>
-      <div className="card p-4">
-        <h2 className="font-bold mb-2">Desglose</h2>
-        <div className="text-sm space-y-2">
-          {saldoInicial > 0 && (
-            <div className="flex justify-between py-1 border-b border-white/5">
-              <span className="text-slate-300">Saldo inicial</span>
-              <span className="font-mono-num">+{fmtCOP(saldoInicial)}</span>
-            </div>
-          )}
-          <div className="flex justify-between py-1 border-b border-white/5">
-            <span className="text-slate-300">
-              Cuotas ({ledger.length} día{ledger.length === 1 ? "" : "s"}
-              {diasExentos > 0 ? ` · ${diasExentos} exento${diasExentos === 1 ? "" : "s"}` : ""})
-            </span>
-            <span className="font-mono-num">+{fmtCOP(totalCuotas)}</span>
-          </div>
-          <div className="flex justify-between py-1 border-b border-white/5">
-            <span className="text-slate-300">Pagos recibidos</span>
-            <span className="font-mono-num text-emerald-300">−{fmtCOP(totalPagos)}</span>
-          </div>
-          <div className="flex justify-between py-1 font-bold">
-            <span>DEBES HOY</span>
-            <span className="font-mono-num">{fmtCOP(deuda)}</span>
-          </div>
-          {credito > 0 && (
-            <p className="text-sm text-emerald-300">Tienes {fmtCOP(credito)} a favor para los próximos días</p>
-          )}
-        </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card p-4"><p className="text-xs text-slate-400">DÍAS PENDIENTES</p><p className="font-mono-num text-xl font-bold">{diasPend}/{ledger.length}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-400">SALDO A FAVOR</p><p className="font-mono-num text-xl font-bold text-emerald-300">{fmtCOP(credito)}</p></div>
       </div>
-      <div className="card p-4">
-        <h2 className="font-bold mb-2">Historial</h2>
-        {ledger.slice().reverse().slice(0, 30).map((r) => (
-          <div key={r.diaSeq} className="py-2 border-b border-white/5 text-sm">
-            <div className="flex justify-between">
-              <span>Día {r.diaSeq} · {r.fecha}</span>
-              <span className="font-mono-num">{fmtCOP(r.totalPagado)} / {fmtCOP(r.cuotaDia)}</span>
-            </div>
-            <div className="flex justify-between text-xs text-slate-400 mt-0.5">
-              <span>{r.exento ? `Exento${r.motivo ? ` — ${r.motivo}` : ""}` : ""}</span>
-              <span className="font-mono-num ml-auto">Deuda tras el día: {fmtCOP(r.deudaAcumulada)}</span>
-            </div>
+      {saldoInicial > 0 && (
+        <p className="text-xs text-slate-400">Incluye saldo inicial de {fmtCOP(saldoInicial)}.</p>
+      )}
+      <div className="card overflow-x-auto">
+        {ledger.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-slate-300">Aún no hay días registrados.</p>
           </div>
-        ))}
+        ) : (
+          <LedgerTable rows={reciente} canEdit={false} />
+        )}
       </div>
       <Link className="btn btn-ghost w-full text-center" href="/api/auth/signout">Salir</Link>
     </div>

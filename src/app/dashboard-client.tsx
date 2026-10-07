@@ -4,6 +4,7 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { fmtCOP, hoyBogota } from "@/lib/utils";
 import { cuotaPrecargada, ledgerRecientePrimero, ordenarContratosPorDeuda, panelKpis } from "@/lib/dashboard-math";
+import { LedgerTable } from "@/components/ledger-table";
 
 type Veh = { id: string; placa: string; alias: string | null; cuotaBase: number };
 type Ct = { id: string; vehicleId: string; clientId: string; fechaInicio: string; saldoInicial: number; omitirDomingos: number };
@@ -224,34 +225,7 @@ function LedgerPanel({
             <p className="text-sm text-slate-300">Genera los días arriba o registra el primer pago.</p>
           </div>
         ) : (
-        <table className="dense w-full min-w-[760px]">
-          <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th>Pagos del día</th><th>Deuda</th><th>Estado</th></tr></thead>
-          <tbody>
-            {ledger.map((r) => (
-              <tr key={r.fecha} className={r.exento ? "opacity-70" : ""}>
-                <td className="font-mono-num font-bold">{r.diaSeq}</td>
-                <td>{r.fecha}{r.exento && <div className="text-xs text-slate-400">Exento{r.motivo ? ` — ${r.motivo}` : ""}</div>}</td>
-                <td className="font-mono-num">{r.exento ? "0" : fmtCOP(r.cuotaDia)}</td>
-                <td className="font-mono-num">
-                  {fmtCOP(r.totalPagado)}
-                  {r.pagos.length > 1 && <span className="text-xs text-sky-300"> ({r.pagos.length})</span>}
-                  {r.pagos.length > 0 && (
-                    <div className="text-xs text-slate-400 space-y-1 mt-1">
-                      {r.pagos.map((p) => (
-                        <div key={p.id} className="flex gap-2 items-center">
-                          <span>{fmtCOP(p.monto)} {p.metodo}{p.nota ? ` · ${p.nota}` : ""}</span>
-                          <button className="text-red-300 hover:text-red-200 min-w-[44px] min-h-[44px]" title="Borrar pago (admin)" onClick={() => borrarPago(p.id)}>×</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </td>
-                <td className="font-mono-num font-bold">{fmtCOP(r.deudaAcumulada)}</td>
-                <td><span className={`badge ${r.estado === "Al día" ? "badge-ok" : "badge-pend"}`}>{r.estado === "Al día" ? "✓ Al día" : "● Pendiente"}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <LedgerTable rows={ledger} canEdit onBorrar={borrarPago} />
         )}
       </div>
       <p className="text-xs text-slate-400">Saldo corrido desde el saldo inicial: deuda = lo que falta, crédito = saldo a favor. Todo pago se aplica al día de hoy.</p>
@@ -314,7 +288,7 @@ export default function DashboardClient() {
         <h1 className="text-2xl font-bold">Pagos — CuotaMoto</h1>
         <div className="card p-6 text-center space-y-3">
           <p className="font-bold">Aún no hay contratos</p>
-          <p className="text-sm text-slate-300">Paso 1: crea una moto · Paso 2: crea el cliente · Paso 3: crea el contrato.</p>
+          <p className="text-sm text-slate-300">Paso 1: crea una moto · Paso 2: crea el conductor · Paso 3: crea el contrato.</p>
           <Link className="btn btn-primary inline-block" href="/admin">Ir a /admin</Link>
         </div>
       </div>
