@@ -10,6 +10,17 @@ export type Ct = {
   omitirDomingos: number;
 };
 export type Omi = { id: string; contractId: string; fecha: string; motivo: string | null };
+export type Usuario = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  telefono: string | null;
+  rol: string;
+  activo: number;
+  createdAt: string;
+  cliente: { id: string; nombre: string } | null;
+  borrable: boolean;
+};
 export type LedgerPago = { id: string; monto: number; metodo: string; nota: string | null };
 export type LedgerRow = {
   diaSeq: number;

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { hoyBogota } from "@/lib/utils";
 import { buildSerie, buildSnapshot, contractHealth, healthFallback } from "@/lib/admin-snapshot";
-import type { AdminSnapshot, Cli, ContractHealth, Ct, LedgerRow, Veh } from "./types";
+import type { AdminSnapshot, Cli, ContractHealth, Ct, LedgerRow, Usuario, Veh } from "./types";
 
 async function fetchJSON(url: string, init?: RequestInit) {
   const r = await fetch(url, init);
@@ -15,6 +15,7 @@ export function useAdminData() {
   const [vehs, setVehs] = useState<Veh[]>([]);
   const [clis, setClis] = useState<Cli[]>([]);
   const [cts, setCts] = useState<Ct[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [healthByContract, setHealthByContract] = useState<Record<string, ContractHealth>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -34,6 +35,12 @@ export function useAdminData() {
       setVehs(v);
       setCts(c);
       setClis(cl);
+      try {
+        const uj = await fetchJSON("/api/admin/users");
+        setUsuarios(uj.users ?? []);
+      } catch {
+        setUsuarios([]);
+      }
 
       const activos = c.filter((x) => x.activo === 1);
       // Ledgers en paralelo, tolerante a fallos individuales
@@ -80,5 +87,5 @@ export function useAdminData() {
     return buildSnapshot({ vehs, clis, cts, healthByContract, serie: serieCache });
   }, [vehs, clis, cts, healthByContract, serieCache]);
 
-  return { snapshot, loading, refreshing, error, lastUpdated, refresh };
+  return { snapshot, usuarios, loading, refreshing, error, lastUpdated, refresh };
 }

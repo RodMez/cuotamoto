@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { fmtCOP } from "@/lib/utils";
-import type { Cli, ContractHealth, Ct, Veh } from "./types";
+import type { Cli, ContractHealth, Ct, Usuario, Veh } from "./types";
 import { Empty, SkeletonRows } from "./ui";
 
 function useSort() {
@@ -229,6 +229,98 @@ export function ContractsTable({
                 <button className="btn btn-ghost !min-h-[36px] text-xs" onClick={() => onAjustar(r.c.id)}>
                   Ajustar
                 </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const ROL_BADGE: Record<string, string> = {
+  admin: "badge-ok",
+  viewer: "badge-pend",
+};
+
+export function UsersTable({
+  users,
+  loading,
+  query,
+  onEditar,
+  onActivar,
+  onBorrar,
+}: {
+  users: Usuario[];
+  loading: boolean;
+  query: string;
+  onEditar: (u: Usuario) => void;
+  onActivar: (u: Usuario) => void;
+  onBorrar: (u: Usuario) => void;
+}) {
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = [...users];
+    if (q)
+      list = list.filter((u) =>
+        `${u.name ?? ""} ${u.email ?? ""} ${u.telefono ?? ""} ${u.rol}`.toLowerCase().includes(q),
+      );
+    return list.sort((a, b) => (a.telefono ?? a.email ?? "").localeCompare(b.telefono ?? b.email ?? ""));
+  }, [users, query]);
+
+  if (loading) return <SkeletonRows n={4} />;
+  if (rows.length === 0) return <Empty title="Sin usuarios" hint="Crea el primero con teléfono y rol." />;
+  return (
+    <div className="overflow-x-auto scroll-thin">
+      <table className="dense w-full min-w-[680px]">
+        <thead className="sticky top-0 bg-[#101a34]">
+          <tr>
+            <th>Usuario</th>
+            <th>Teléfono</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Cliente</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((u) => (
+            <tr key={u.id} className={u.activo === 0 ? "opacity-60" : ""}>
+              <td className="font-semibold">{u.name ?? u.telefono ?? u.email ?? "—"}</td>
+              <td className="font-mono-num">{u.telefono ?? "—"}</td>
+              <td>
+                <span className={`badge ${ROL_BADGE[u.rol] ?? ""}`}>{u.rol}</span>
+              </td>
+              <td>
+                {u.activo === 1 ? (
+                  <span className="badge badge-ok">Activo</span>
+                ) : (
+                  <span className="badge badge-pend">Inactivo</span>
+                )}
+              </td>
+              <td className="text-sm text-slate-300">{u.cliente?.nombre ?? "—"}</td>
+              <td>
+                <div className="flex gap-1">
+                  <button className="btn btn-ghost !min-h-[36px] text-xs" onClick={() => onEditar(u)}>
+                    Editar
+                  </button>
+                  <button
+                    className="btn btn-ghost !min-h-[36px] text-xs"
+                    title={u.activo === 1 ? "Bloquea el acceso al instante" : "Reactiva el acceso"}
+                    onClick={() => onActivar(u)}
+                  >
+                    {u.activo === 1 ? "Desactivar" : "Reactivar"}
+                  </button>
+                  {u.borrable && (
+                    <button
+                      className="btn btn-ghost !min-h-[36px] text-xs text-red-300"
+                      title="Solo sin historial"
+                      onClick={() => onBorrar(u)}
+                    >
+                      Borrar
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}

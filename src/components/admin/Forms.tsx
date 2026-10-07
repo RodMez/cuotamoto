@@ -9,7 +9,7 @@ import {
   motosLibres,
   puedeAvanzarWizard,
 } from "@/lib/form-valid";
-import type { Cli, Ct, Omi, Veh } from "./types";
+import type { Cli, Ct, Omi, Usuario, Veh } from "./types";
 import { Field, Modal } from "./ui";
 import { useToast } from "./Toast";
 
@@ -18,6 +18,32 @@ async function post(url: string, body: unknown) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j?.error ?? "Error al guardar");
   return j;
+}
+
+async function patch(url: string, body: unknown) {
+  const r = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.error ?? "Error al guardar");
+  return j;
+}
+
+async function del(url: string) {
+  const r = await fetch(url, { method: "DELETE" });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.error ?? "Error al borrar");
+  return j;
+}
+
+export async function patchJSON(url: string, body: unknown) {
+  return patch(url, body);
+}
+
+export async function delJSON(url: string) {
+  return del(url);
+}
+
+export function nombreUsuario(u: { name?: string | null; telefono?: string | null; email?: string | null }) {
+  return u.name ?? u.telefono ?? u.email ?? "usuario";
 }
 
 export function MotoForm({ onDone }: { onDone: () => void }) {
@@ -429,5 +455,93 @@ export function UsuarioForm({ clis, onDone }: { clis: Cli[]; onDone: () => void 
         {busy ? "Creando…" : "+ Crear usuario"}
       </button>
     </form>
+  );
+}
+
+export function UserEditModal({
+  user,
+  clis,
+  onClose,
+  onDone,
+}: {
+  user: Usuario;
+  clis: Cli[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { push } = useToast();
+  const [tel, setTel] = useState(user.telefono ?? "");
+  const [email, setEmail] = useState(user.email ?? "");
+  const [pass, setPass] = useState("");
+  const [rol, setRol] = useState(user.rol);
+  const [link, setLink] = useState(user.cliente?.id ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const emailVal = email.trim();
+      await patch("/api/admin/users", {
+        userId: user.id,
+        ...(tel.trim() !== (user.telefono ?? "") ? { telefono: tel.trim() } : {}),
+        ...(emailVal === "" ? { email: null } : emailVal !== (user.email ?? "") ? { email: emailVal } : {}),
+        ...(pass ? { newPassword: pass } : {}),
+        ...(rol !== user.rol ? { rol } : {}),
+        ...(rol === "conductor" ? { clientId: link || null } : {}),
+      });
+      push("ok", "Usuario actualizado");
+      onDone();
+      onClose();
+    } catch (err) {
+      push("err", err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={`Editar usuario`} onClose={onClose}>
+      <form className="grid gap-3" onSubmit={submit}>
+        <Field label="Teléfono login">
+          <input className="input font-mono-num" value={tel} onChange={(e) => setTel(e.target.value)} required />
+        </Field>
+        <Field label="Email (vacío = sin email)">
+          <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="opcional" />
+        </Field>
+        <Field label="Nueva clave (vacío = no cambiar)" hint="mín. 8 caracteres; cierra sesiones viejas">
+          <input className="input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="••••••••" />
+        </Field>
+        <Field label="Rol">
+          <select className="input" value={rol} onChange={(e) => setRol(e.target.value)}>
+            <option value="conductor">conductor</option>
+            <option value="cobrador">cobrador</option>
+            <option value="viewer">viewer</option>
+            <option value="admin">admin</option>
+          </select>
+        </Field>
+        {rol === "conductor" && (
+          <Field label="Cliente linkeado" hint="el conductor solo ve la deuda de este cliente">
+            <select className="input" value={link} onChange={(e) => setLink(e.target.value)}>
+              <option value="">Sin link</option>
+              {clis.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre} · {c.telefono}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            {busy ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

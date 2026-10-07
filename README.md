@@ -20,6 +20,17 @@ Control de pagos del alquiler de motos con **cuota diaria variable**. Tabla esti
 - Login con rate limit (5 fallos → 15 min) y rol revalidado desde la DB.
 - Trazabilidad en `audit_log` (misma transacción que el cambio, sin secretos).
 
+## Usuarios (tab Admin → Usuarios)
+
+- **Desactivar** es la baja normal: bloquea el acceso al instante (el token
+  vivo recibe 401) y conserva pagos, auditoría y link al cliente. Reactivar
+  lo devuelve todo.
+- **Borrar** solo sin historial (`audit_log` ni `payments.created_by`);
+  si lo tiene, 409 "tiene historial, desactívalo".
+- Guards: no a ti mismo, nunca al último admin activo (contado en la misma tx).
+- Restablecer clave sube `tokenVersion`: las sesiones viejas mueren al instante.
+- Conductor requiere link a cliente; un cliente linkeado a otro da 409.
+
 ## Desarrollo local
 
 ```bash

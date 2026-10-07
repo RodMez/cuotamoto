@@ -18,11 +18,13 @@ import {
 } from "lucide-react";
 import { fmtCOP, hoyBogota } from "@/lib/utils";
 import { useAdminData } from "@/components/admin/useAdminData";
-import { ToastProvider } from "@/components/admin/Toast";
-import { AjusteModal, ClienteForm, ContratoWizard, MotoForm, OmisionesPanel, UsuarioForm } from "@/components/admin/Forms";
+import { useToast, ToastProvider } from "@/components/admin/Toast";
+import { AjusteModal, ClienteForm, ContratoWizard, MotoForm, OmisionesPanel, UserEditModal, UsuarioForm, delJSON, nombreUsuario, patchJSON } from "@/components/admin/Forms";
 import { AreaTrend, Donut, TopBars } from "@/components/admin/Charts";
 import { Bullet, KpiCard } from "@/components/admin/Kpi";
-import { ClientsTable, ContractsTable, FleetTable } from "@/components/admin/Tables";
+import { ClientsTable, ContractsTable, FleetTable, UsersTable } from "@/components/admin/Tables";
+import { Confirm } from "@/components/admin/ui";
+import type { Usuario } from "@/components/admin/types";
 
 type Tab = "overview" | "motos" | "clientes" | "contratos" | "omisiones" | "usuarios";
 
@@ -36,12 +38,44 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; hint: string }[] = 
 ];
 
 function AdminInner() {
-  const { snapshot, loading, refreshing, error, lastUpdated, refresh } = useAdminData();
+  const { snapshot, usuarios, loading, refreshing, error, lastUpdated, refresh } = useAdminData();
+  const { push } = useToast();
   const [tab, setTab] = useState<Tab>("overview");
   const [query, setQuery] = useState("");
   const [ctFilter, setCtFilter] = useState<"todos" | "pendientes" | "aldia">("todos");
   const [ajusteId, setAjusteId] = useState<string | null>(null);
+  const [editUser, setEditUser] = useState<Usuario | null>(null);
+  const [confirmUser, setConfirmUser] = useState<{ u: Usuario; accion: "activar" | "borrar" } | null>(null);
+  const [busyUser, setBusyUser] = useState(false);
   const [meta, setMeta] = useState("500000");
+
+  async function activarUsuario(u: Usuario) {
+    setBusyUser(true);
+    try {
+      await patchJSON("/api/admin/users", { userId: u.id, activo: u.activo === 1 ? 0 : 1 });
+      push("ok", u.activo === 1 ? `${nombreUsuario(u)} desactivado (acceso bloqueado)` : `${nombreUsuario(u)} reactivado`);
+      setConfirmUser(null);
+      void refresh(true);
+    } catch (e) {
+      push("err", e instanceof Error ? e.message : "No se pudo cambiar el estado");
+    } finally {
+      setBusyUser(false);
+    }
+  }
+
+  async function borrarUsuario(u: Usuario) {
+    setBusyUser(true);
+    try {
+      await delJSON(`/api/admin/users?id=${u.id}`);
+      push("ok", `${nombreUsuario(u)} borrado`);
+      setConfirmUser(null);
+      void refresh(true);
+    } catch (e) {
+      push("err", e instanceof Error ? e.message : "No se pudo borrar");
+    } finally {
+      setBusyUser(false);
+    }
+  }
 
   const mes = hoyBogota().slice(0, 7);
   const pendContratos = snapshot.contratosActivos.filter((c) => (snapshot.healthByContract[c.id]?.diasPend ?? 0) > 0).length;
@@ -336,7 +370,22 @@ function AdminInner() {
         )}
 
         {tab === "usuarios" && (
-          <section className="grid gap-3 lg:grid-cols-12">
+          <section className="grid gap-3">
+            <div className="card card-pad">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-bold">
+                  Usuarios <span className="font-mono-num text-slate-400">({usuarios.length})</span>
+                </h2>
+              </div>
+              <UsersTable
+                users={usuarios}
+                loading={loading}
+                query={query}
+                onEditar={(u) => setEditUser(u)}
+                onActivar={(u) => setConfirmUser({ u, accion: "activar" })}
+                onBorrar={(u) => setConfirmUser({ u, accion: "borrar" })}
+              />
+            </div>
             <div className="card card-pad lg:col-span-8">
               <h2 className="mb-3 text-sm font-bold">4 · Nuevo usuario</h2>
               <UsuarioForm clis={snapshot.clis} onDone={() => void refresh(true)} />
@@ -347,6 +396,7 @@ function AdminInner() {
               <p><span className="font-mono-num text-slate-200">cobrador</span> · cobra y genera días (no futuro).</p>
               <p><span className="font-mono-num text-slate-200">conductor</span> · entra con teléfono, solo ve su deuda (requiere link a cliente).</p>
               <p><span className="font-mono-num text-slate-200">viewer</span> · lectura global.</p>
+              <p>Desactivar bloquea el acceso al instante. Borrar solo funciona sin historial.</p>
             </div>
           </section>
         )}
@@ -366,6 +416,41 @@ function AdminInner() {
           initialId={ajusteId}
           onClose={() => setAjusteId(null)}
           onDone={() => void refresh(true)}
+        />
+      )}
+
+      {editUser && (
+        <UserEditModal
+          user={editUser}
+          clis={snapshot.clis}
+          onClose={() => setEditUser(null)}
+          onDone={() => void refresh(true)}
+        />
+      )}
+
+      {confirmUser?.accion === "activar" && (
+        <Confirm
+          title={confirmUser.u.activo === 1 ? "Desactivar usuario" : "Reactivar usuario"}
+          text={
+            confirmUser.u.activo === 1
+              ? `${nombreUsuario(confirmUser.u)} perderá el acceso al instante. Sus pagos y auditoría se conservan.`
+              : `${nombreUsuario(confirmUser.u)} podrá entrar de nuevo con su teléfono y clave.`
+          }
+          confirmLabel={confirmUser.u.activo === 1 ? "Desactivar" : "Reactivar"}
+          busy={busyUser}
+          onCancel={() => setConfirmUser(null)}
+          onConfirm={() => void activarUsuario(confirmUser.u)}
+        />
+      )}
+
+      {confirmUser?.accion === "borrar" && (
+        <Confirm
+          title="Borrar usuario"
+          text={`${nombreUsuario(confirmUser.u)} se elimina para siempre. Solo permitido sin historial.`}
+          confirmLabel="Borrar"
+          busy={busyUser}
+          onCancel={() => setConfirmUser(null)}
+          onConfirm={() => void borrarUsuario(confirmUser.u)}
         />
       )}
     </div>

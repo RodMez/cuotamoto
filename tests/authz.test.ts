@@ -57,6 +57,26 @@ describe("identity (rol revalidado desde DB)", () => {
     await db.update(users).set({ rol: "admin" }).where(eq(users.id, id));
     expect(await identity()).toEqual({ id, rol: "admin" });
   });
+
+  it("null si el usuario está desactivado (401 inmediato)", async () => {
+    const id = await mkUser("cobrador");
+    sesion(id);
+    expect(await identity()).not.toBeNull();
+    await db.update(users).set({ activo: 0 }).where(eq(users.id, id));
+    expect(await identity()).toBeNull();
+    await db.update(users).set({ activo: 1 }).where(eq(users.id, id));
+    expect(await identity()).not.toBeNull();
+  });
+
+  it("null si tokenVersion cambió (clave restablecida: sesiones viejas mueren)", async () => {
+    const id = await mkUser("viewer");
+    authMock.auth.mockResolvedValue({ user: { id, tokenVersion: 0 } });
+    expect(await identity()).not.toBeNull();
+    await db.update(users).set({ tokenVersion: 1 }).where(eq(users.id, id));
+    expect(await identity()).toBeNull();
+    authMock.auth.mockResolvedValue({ user: { id, tokenVersion: 1 } });
+    expect(await identity()).not.toBeNull();
+  });
 });
 
 describe("requireRole", () => {

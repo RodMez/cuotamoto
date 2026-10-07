@@ -53,6 +53,7 @@ describe("authorizeLogin: éxito", () => {
     expect(porEmail?.id).toBe(u.id);
     expect(porEmail?.rol).toBe("cobrador");
     expect(porEmail?.telefono).toBe(u.telefono);
+    expect(porEmail?.tokenVersion).toBe(0);
 
     const porTel = await authorizeLogin({ identificador: u.telefono, password: "clave-secreta-1" });
     expect(porTel?.id).toBe(u.id);
@@ -132,6 +133,13 @@ describe("authorizeLogin: intentos y bloqueo", () => {
     await authorizeLogin({ identificador: u.email, password: "buena-1234" });
     expect(await intentoDe(viejo)).toBeUndefined();
   });
+
+  it("desactivado (activo=0): null aun con clave buena, y suma intento", async () => {
+    const u = await mkLoginUser("buena-1234");
+    await db.update(users).set({ activo: 0 }).where(eq(users.id, u.id));
+    expect(await authorizeLogin({ identificador: u.email, password: "buena-1234" })).toBeNull();
+    expect((await intentoDe(u.email))?.intentos).toBe(1);
+  });
 });
 
 describe("jwtCallback / sessionCallback", () => {
@@ -141,6 +149,21 @@ describe("jwtCallback / sessionCallback", () => {
 
     const sinUser = await jwtCallback({ token: { a: 1 } });
     expect(sinUser).toEqual({ a: 1 });
+  });
+
+  it("jwt propaga tokenVersion y session la expone (default 0)", async () => {
+    const t = await jwtCallback({ token: {}, user: { rol: "admin", tokenVersion: 3 } });
+    expect(t).toMatchObject({ tokenVersion: 3 });
+    const out = await sessionCallback({
+      session: { user: {}, expires: "x" },
+      token: { rol: "admin", sub: "u-1", tokenVersion: 3 },
+    });
+    expect(out.user).toMatchObject({ id: "u-1", tokenVersion: 3 });
+    const sinVersion = await sessionCallback({
+      session: { user: {}, expires: "x" },
+      token: { sub: "u-2" },
+    });
+    expect(sinVersion.user).toMatchObject({ id: "u-2", tokenVersion: 0 });
   });
 
   it("session expone rol, teléfono e id (desde sub)", async () => {
