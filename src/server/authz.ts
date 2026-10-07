@@ -8,20 +8,26 @@ export type Identity = { id: string; rol: Role };
 
 /**
  * Sesión con rol REVALIDADO desde la DB (el JWT puede estar viejo).
- * Devuelve null si no hay sesión o el usuario ya no existe.
+ * Devuelve null si: no hay sesión, el usuario ya no existe, está
+ * desactivado (activo=0), o su tokenVersion cambió (clave restablecida
+ * o reactivación: las sesiones viejas mueren al instante).
  * Las rutas responden 401/403 con esto; proxy.ts solo hace routing.
  */
 export async function identity(): Promise<Identity | null> {
   const s = await auth();
-  const sub = (s?.user as unknown as { id?: string } | undefined)?.id;
+  const sessUser = s?.user as unknown as { id?: string; tokenVersion?: number } | undefined;
+  const sub = sessUser?.id;
   if (!s?.user || !sub) return null;
   const rows = await db
-    .select({ id: users.id, rol: users.rol })
+    .select({ id: users.id, rol: users.rol, activo: users.activo, tokenVersion: users.tokenVersion })
     .from(users)
     .where(eq(users.id, sub))
     .limit(1);
-  if (!rows[0]) return null;
-  return { id: rows[0].id, rol: rows[0].rol as Role };
+  const u = rows[0];
+  if (!u) return null;
+  if ((u.activo ?? 1) === 0) return null;
+  if ((sessUser.tokenVersion ?? 0) !== (u.tokenVersion ?? 0)) return null;
+  return { id: u.id, rol: u.rol as Role };
 }
 
 /** Exige uno de los roles; lanza Response 401/403 lista para retornar. */

@@ -23,3 +23,14 @@ export const crearClienteSchema = z.object({
   telefono: telefonoSchema,
   documento: z.string().trim().max(40).nullish(),
 });
+
+export const editarUsuarioSchema = z.object({
+  userId: z.string().trim().min(1, "userId requerido"),
+  nombre: z.string().trim().max(120).nullish(),
+  telefono: telefonoSchema.nullish(),
+  email: emailSchema.nullable().optional(),
+  newPassword: z.string().min(8, "mínimo 8 caracteres").max(128).nullish(),
+  rol: rolSchema.nullish(),
+  activo: z.union([z.literal(0), z.literal(1)]).nullish(),
+  clientId: z.string().trim().min(1).nullable().optional(),
+});

@@ -16,6 +16,7 @@ export type LoginUser = {
   email: string | null;
   rol: Role;
   telefono: string | null;
+  tokenVersion: number;
 };
 
 /**
@@ -63,9 +64,10 @@ export async function authorizeLogin(c: {
     .where(or(eq(users.email, ident), eq(users.telefono, ident)))
     .limit(1);
   const u = rows[0];
-  // Compara siempre (hash falso si no existe) para tiempo uniforme
+  // Compara siempre (hash falso si no existe) para tiempo uniforme.
+  // Los desactivados también comparan: misma respuesta, sin filtrar estado.
   const ok = await bcrypt.compare(pass, u?.passwordHash ?? FAKE_HASH);
-  if (!u || !ok) {
+  if (!u || !ok || (u.activo ?? 1) === 0) {
     const n = (intento?.intentos ?? 0) + 1;
     const bloqueo = n >= MAX_INTENTOS ? new Date(ahora.getTime() + BLOQUEO_MS).toISOString() : null;
     if (intento) {
@@ -91,21 +93,25 @@ export async function authorizeLogin(c: {
     email: u.email,
     rol: u.rol as Role,
     telefono: u.telefono,
+    tokenVersion: u.tokenVersion ?? 0,
   };
 }
 
-/** Propaga rol/teléfono del usuario al JWT (primer login). */
+/** Propaga rol/teléfono/tokenVersion del usuario al JWT (primer login). */
 export async function jwtCallback<T extends Record<string, unknown>>(args: {
   token: T;
   user?: unknown;
 }): Promise<T> {
-  const cu = args.user as unknown as { rol?: string; telefono?: string } | undefined;
+  const cu = args.user as unknown as { rol?: string; telefono?: string; tokenVersion?: number } | undefined;
   if (cu?.rol) (args.token as Record<string, unknown>).rol = cu.rol;
   if (cu?.telefono) (args.token as Record<string, unknown>).telefono = cu.telefono;
+  if (typeof cu?.tokenVersion === "number") {
+    (args.token as Record<string, unknown>).tokenVersion = cu.tokenVersion;
+  }
   return args.token;
 }
 
-/** Expone rol/teléfono/id (desde sub) en la sesión. authz.ts depende de `id`. */
+/** Expone rol/teléfono/id/tokenVersion (desde sub) en la sesión. authz.ts depende de `id`. */
 export async function sessionCallback<
   S extends { user: object },
   T extends Record<string, unknown>,
@@ -114,5 +120,6 @@ export async function sessionCallback<
   u.rol = args.token.rol;
   u.telefono = args.token.telefono;
   u.id = args.token.sub;
+  u.tokenVersion = (args.token.tokenVersion as number | undefined) ?? 0;
   return args.session;
 }
