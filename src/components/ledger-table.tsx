@@ -29,7 +29,7 @@ export function LedgerTable({
   onBorrar?: (id: string) => void;
 }) {
   return (
-    <table className="dense w-full min-w-[760px]">
+    <table className="dense w-full min-w-[580px]">
       <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th>Pagos del día</th><th>Deuda</th><th>Estado</th></tr></thead>
       <tbody>
         {rows.map((r) => (
@@ -41,12 +41,12 @@ export function LedgerTable({
               {fmtCOP(r.totalPagado)}
               {r.pagos.length > 1 && <span className="text-xs text-sky-300"> ({r.pagos.length})</span>}
               {r.pagos.length > 0 && (
-                <div className="text-xs text-slate-400 space-y-1 mt-1">
+                <div className="text-xs text-slate-400 mt-0.5">
                   {r.pagos.map((p) => (
-                    <div key={p.id} className="flex gap-2 items-center">
+                    <div key={p.id} className="flex gap-1 items-center leading-tight">
                       <span>{fmtCOP(p.monto)} {p.metodo}{p.nota ? ` · ${p.nota}` : ""}</span>
                       {canEdit && (
-                        <button className="text-red-300 hover:text-red-200 min-w-[44px] min-h-[44px]" title="Borrar pago (admin)" onClick={() => onBorrar?.(p.id)}>×</button>
+                        <button className="text-red-300 hover:text-red-200 px-1.5 py-0.5" title="Borrar pago (admin)" onClick={() => onBorrar?.(p.id)}>×</button>
                       )}
                     </div>
                   ))}

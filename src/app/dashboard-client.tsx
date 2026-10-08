@@ -205,12 +205,17 @@ function LedgerPanel({
         <button className="btn btn-accent min-h-[44px] text-lg font-bold" onClick={() => { setMonto(""); setAviso(null); setModalAbierto(true); }}>+ Abonar hoy</button>
       </div>
 
-      <div className="card p-4 flex flex-wrap gap-2 items-end">
-        <div><label className="text-xs">Generar días hasta</label><input className="input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
-        <div><label className="text-xs">Cuota (si crea nuevo)</label><input className="input font-mono-num" value={cuotaVal} onChange={(e) => setCuota(e.target.value)} /></div>
-        <button className="btn btn-accent min-h-[44px]" onClick={genDias}>+ Generar días</button>
-        <p className="text-xs text-slate-400 w-full">Crea los faltantes hasta la fecha (respeta domingos y omisiones). Al registrar un pago el día se crea solo si falta.</p>
-      </div>
+      <details className="card">
+        <summary className="cursor-pointer px-4 py-2 text-xs text-slate-400 hover:text-slate-200 select-none">
+          ⚙ Generar días manualmente…
+        </summary>
+        <div className="px-4 pb-4 pt-2 flex flex-wrap gap-2 items-end border-t border-white/5">
+          <div><label className="text-xs">Generar días hasta</label><input className="input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
+          <div><label className="text-xs">Cuota (si crea nuevo)</label><input className="input font-mono-num" value={cuotaVal} onChange={(e) => setCuota(e.target.value)} /></div>
+          <button className="btn btn-ghost min-h-[44px]" onClick={genDias}>+ Generar días</button>
+          <p className="text-xs text-slate-400 w-full">Crea los faltantes hasta la fecha (respeta domingos y omisiones). Al registrar un pago el día se crea solo si falta.</p>
+        </div>
+      </details>
 
       {aviso && (
         <div className="card p-3 border border-emerald-500/40 text-sm text-emerald-300" role="status">

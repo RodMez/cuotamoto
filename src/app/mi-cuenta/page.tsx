@@ -35,7 +35,7 @@ export default async function MiCuenta() {
   const diasPend = ledger.filter((r) => r.estado === "Pendiente").length;
 
   return (
-    <div className="p-4 max-w-md mx-auto space-y-4 w-full">
+    <div className="p-4 max-w-2xl mx-auto space-y-4 w-full">
       <h1 className="text-xl font-bold">Mi cuenta — {mine.nombre}</h1>
       <div className="card p-6 text-center">
         <p className="text-sm text-slate-300">DEBES HOY</p>
