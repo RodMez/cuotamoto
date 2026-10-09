@@ -104,11 +104,13 @@ describe("POST /api/vehicles", () => {
       Response.json({ error: "no auth" }, { status: 401 }),
     );
     expect((await post({ placa: "ABC-123", cuotaBase: 15000 })).status).toBe(401);
+    expect(authMocks.requireRole).toHaveBeenCalledWith("admin");
 
     authMocks.requireRole.mockRejectedValueOnce(
       Response.json({ error: "sin permiso" }, { status: 403 }),
     );
     expect((await post({ placa: "ABC-123", cuotaBase: 15000 })).status).toBe(403);
+    expect(authMocks.requireRole).toHaveBeenCalledWith("admin");
   });
 
   it("400 con placa faltante o vacía, y cuotaBase no entera o menor/igual a 0", async () => {
@@ -142,6 +144,7 @@ describe("POST /api/vehicles", () => {
     });
 
     expect(res.status).toBe(200);
+    expect(authMocks.requireRole).toHaveBeenCalledWith("admin");
     const json = await res.json();
     expect(json.ok).toBe(true);
     expect(json.vehicle.placa).toBe(placaExpected);

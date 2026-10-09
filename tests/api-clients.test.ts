@@ -75,11 +75,13 @@ describe("POST /api/clients", () => {
       Response.json({ error: "no auth" }, { status: 401 }),
     );
     expect((await post({ nombre: "Carlos", telefono: "3001234567" })).status).toBe(401);
+    expect(authMocks.requireRole).toHaveBeenCalledWith("admin", "cobrador");
 
     authMocks.requireRole.mockRejectedValueOnce(
       Response.json({ error: "sin permiso" }, { status: 403 }),
     );
     expect((await post({ nombre: "Carlos", telefono: "3001234567" })).status).toBe(403);
+    expect(authMocks.requireRole).toHaveBeenCalledWith("admin", "cobrador");
   });
 
   it("permite creación tanto por admin como por cobrador", async () => {
@@ -88,12 +90,14 @@ describe("POST /api/clients", () => {
     const tel1 = "310" + Math.floor(Math.random() * 1e7);
     const rAdmin = await post({ nombre: "Cliente Admin", telefono: tel1 });
     expect(rAdmin.status).toBe(200);
+    expect(authMocks.requireRole).toHaveBeenCalledWith("admin", "cobrador");
 
     // Cobrador
     authMocks.requireRole.mockResolvedValue(COBRADOR);
     const tel2 = "320" + Math.floor(Math.random() * 1e7);
     const rCobrador = await post({ nombre: "Cliente Cobrador", telefono: tel2 });
     expect(rCobrador.status).toBe(200);
+    expect(authMocks.requireRole).toHaveBeenCalledWith("admin", "cobrador");
   });
 
   it("400 con nombre faltante o teléfono inválido", async () => {
