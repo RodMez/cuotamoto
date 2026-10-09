@@ -28,8 +28,8 @@ export default defineConfig({
       exclude: ["src/**/*.test.{ts,tsx}", "**/node_modules/**"],
       // Ratchet inicial (2026-10): líneas ~54%. Solo rige con --coverage.
       thresholds: {
-        lines: 48,
-        statements: 48,
+        lines: 55,
+        statements: 55,
       },
     },
   },
