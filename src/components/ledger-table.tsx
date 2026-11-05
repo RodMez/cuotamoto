@@ -30,28 +30,35 @@ export function LedgerTable({
 }) {
   return (
     <table className="dense w-full min-w-[580px]">
-      <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th>Pagos del día</th><th>Deuda</th><th>Estado</th></tr></thead>
+      <thead><tr><th>Día</th><th>Fecha</th><th>Cuota</th><th className="w-[240px]">Pagos del día</th><th>Deuda</th><th>Estado</th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.fecha} className={r.exento ? "opacity-70" : ""}>
             <td className="font-mono-num font-bold">{r.diaSeq}</td>
             <td>{r.fecha}{r.exento && <div className="text-xs text-slate-400">Exento{r.motivo ? ` — ${r.motivo}` : ""}</div>}</td>
             <td className="font-mono-num">{r.exento ? "0" : fmtCOP(r.cuotaDia)}</td>
-            <td className="font-mono-num">
-              {fmtCOP(r.totalPagado)}
-              {r.pagos.length > 1 && <span className="text-xs text-sky-300"> ({r.pagos.length})</span>}
-              {r.pagos.length > 0 && (
-                <div className="text-xs text-slate-400 mt-0.5">
-                  {r.pagos.map((p) => (
-                    <div key={p.id} className="flex gap-1 items-center leading-tight">
-                      <span>{fmtCOP(p.monto)} {p.metodo}{p.nota ? ` · ${p.nota}` : ""}</span>
-                      {canEdit && (
-                        <button className="text-red-300 hover:text-red-200 px-1.5 py-0.5" title="Borrar pago (admin)" onClick={() => onBorrar?.(p.id)}>×</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+            <td className="font-mono-num align-top">
+              <div className="max-w-[240px]">
+                {fmtCOP(r.totalPagado)}
+                {r.pagos.length > 1 && <span className="text-xs text-sky-300"> ({r.pagos.length})</span>}
+                {r.pagos.length > 0 && (
+                  <div className="text-xs text-slate-400 mt-0.5 space-y-0.5">
+                    {r.pagos.map((p) => (
+                      <div key={p.id} className="flex gap-1 items-start leading-tight">
+                        <span
+                          className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] line-clamp-2"
+                          title={p.nota ?? undefined}
+                        >
+                          {fmtCOP(p.monto)} {p.metodo}{p.nota ? ` · ${p.nota}` : ""}
+                        </span>
+                        {canEdit && (
+                          <button className="shrink-0 text-red-300 hover:text-red-200 px-1.5 py-0.5" title="Borrar pago (admin)" onClick={() => onBorrar?.(p.id)}>×</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </td>
             <td className="font-mono-num font-bold">{fmtCOP(r.deudaAcumulada)}</td>
             <td><span className={`badge ${r.estado === "Al día" ? "badge-ok" : "badge-pend"}`}>{r.estado === "Al día" ? "✓ Al día" : "● Pendiente"}</span></td>
