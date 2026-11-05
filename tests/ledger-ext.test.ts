@@ -77,6 +77,17 @@ describe("getLedger: bordes de pago", () => {
     expect(sum.diasPendientes).toBe(3);
     expect(sum.deudaTotal).toBe(51000);
   });
+
+  it("un pago final que cubre todo deja 0 días pendientes aunque haya filas históricas Pendiente", async () => {
+    const ct = await fixture({ inicio: "2026-11-02" });
+    await ensureDays(ct, "2026-11-04");
+    await pay(ct, "2026-11-04", 51000);
+    const L = await getLedger(ct);
+    expect(L.map((r) => r.estado)).toEqual(["Pendiente", "Pendiente", "Al día"]);
+    const sum = summarize(L);
+    expect(sum.deudaTotal).toBe(0);
+    expect(sum.diasPendientes).toBe(0);
+  });
 });
 
 describe("ensureDays: bordes", () => {

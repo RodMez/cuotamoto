@@ -1,6 +1,7 @@
 import { db } from "./index";
 import { ledgerDays, payments, contracts } from "./schema";
 import { eq, asc } from "drizzle-orm";
+import { contarDiasPendientes } from "@/lib/pendientes";
 
 export type LedgerRow = {
   diaSeq: number;
@@ -82,7 +83,6 @@ export async function getLedger(contractId: string): Promise<LedgerRow[]> {
 
 export function summarize(ledger: LedgerRow[], saldoInicial = 0) {
   const last = ledger[ledger.length - 1];
-  const pendientes = ledger.filter((r) => r.estado === "Pendiente").length;
   const recaudoMes = (prefix: string) =>
     ledger
       .filter((r) => r.fecha.startsWith(prefix))
@@ -90,7 +90,7 @@ export function summarize(ledger: LedgerRow[], saldoInicial = 0) {
   return {
     deudaTotal: last?.deudaAcumulada ?? saldoInicial,
     creditoTotal: last?.credito ?? 0,
-    diasPendientes: pendientes,
+    diasPendientes: contarDiasPendientes(ledger),
     diasTotal: ledger.length,
     recaudoMes,
     ultimo: last,

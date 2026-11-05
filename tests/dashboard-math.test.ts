@@ -9,6 +9,7 @@ import {
 
 function fila(partial: Partial<PanelRow> & { fecha: string }): PanelRow {
   return {
+    cuotaDia: 17000,
     deudaAcumulada: 17000,
     credito: 0,
     estado: "Pendiente",
@@ -48,10 +49,29 @@ describe("panelKpis", () => {
     ];
     const k = panelKpis(reciente, { hoy: "2026-10-15" });
     expect(k.deuda).toBe(3000); // el día más reciente, no el más viejo
-    expect(k.pend).toBe(2);
+    expect(k.pend).toBe(1); // 3.000 de deuda = 1 cuota de 17.000
     expect(k.mes).toBe("2026-10");
     expect(k.recaudo).toBe(0 + 5000 + 17000);
     expect(k.total).toBe(3);
+  });
+
+  it("pend se calcula desde el final, no sobre el orden invertido", () => {
+    // Reciente primero: si se recorriera tal cual, el "último" sería el día 1 (deuda 0).
+    const reciente = [
+      fila({ fecha: "2026-10-03", deudaAcumulada: 34000 }),
+      fila({ fecha: "2026-10-02", deudaAcumulada: 17000, totalPagado: 17000 }),
+      fila({ fecha: "2026-10-01", deudaAcumulada: 0, estado: "Al día", totalPagado: 17000 }),
+    ];
+    expect(panelKpis(reciente, { hoy: "2026-10-03" }).pend).toBe(2);
+  });
+
+  it("días históricos Pendiente ya cubiertos no cuentan", () => {
+    const reciente = [
+      fila({ fecha: "2026-10-03", deudaAcumulada: 0, estado: "Al día" }),
+      fila({ fecha: "2026-10-02", deudaAcumulada: 17000 }),
+      fila({ fecha: "2026-10-01", deudaAcumulada: 17000 }),
+    ];
+    expect(panelKpis(reciente, { hoy: "2026-10-03" }).pend).toBe(0);
   });
 
   it("crédito a favor también viene del día más reciente", () => {

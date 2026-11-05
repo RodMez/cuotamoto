@@ -4,6 +4,7 @@ import type {
   Ct,
   LedgerRow,
 } from "@/components/admin/types";
+import { contarDiasPendientes } from "./pendientes";
 
 /**
  * Salud por contrato (réplica exacta de useAdminData).
@@ -18,7 +19,7 @@ export function contractHealth(
   const recaudoMes = ledger
     .filter((x) => x.fecha.startsWith(mes))
     .reduce((a, x) => a + x.totalPagado, 0);
-  const diasPend = ledger.filter((x) => x.estado === "Pendiente").length;
+  const diasPend = contarDiasPendientes(ledger);
   return {
     contractId: ct.id,
     deuda: last?.deudaAcumulada ?? ct.saldoInicial ?? 0,

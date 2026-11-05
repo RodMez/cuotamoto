@@ -51,6 +51,22 @@ describe("contractHealth", () => {
     });
   });
 
+  it("no cuenta días históricos Pendiente si la deuda final es 0", () => {
+    const L = [
+      fila({ fecha: "2026-09-30", estado: "Pendiente", deudaAcumulada: 17000 }),
+      fila({
+        fecha: "2026-10-01",
+        estado: "Al día",
+        deudaAcumulada: 0,
+        totalPagado: 34000,
+      }),
+    ];
+    const h = contractHealth(ct("a"), L, "2026-10");
+    expect(h.diasPend).toBe(0);
+    expect(h.deuda).toBe(0);
+    expect(h.alDia).toBe(true);
+  });
+
   it("vacío cae al saldoInicial y queda al día", () => {
     expect(contractHealth(ct("a", { saldoInicial: 4000 }), [], "2026-10")).toEqual({
       contractId: "a",

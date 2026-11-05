@@ -65,6 +65,37 @@ describe("summarize", () => {
     expect(sum.diasPendientes).toBe(0);
   });
 
+  it("no cuenta días históricos Pendiente si la deuda final es 0", () => {
+    const L = [
+      fila({ fecha: "2026-10-01", estado: "Pendiente", saldo: 17000, deudaAcumulada: 17000 }),
+      fila({ fecha: "2026-10-02", estado: "Pendiente", saldo: 34000, deudaAcumulada: 34000 }),
+      fila({
+        fecha: "2026-10-03",
+        estado: "Al día",
+        saldo: 0,
+        deudaAcumulada: 0,
+        totalPagado: 51000,
+      }),
+    ];
+    expect(summarize(L).diasPendientes).toBe(0);
+  });
+
+  it("cuenta solo las cuotas que faltan, no todo el histórico", () => {
+    // 3 cuotas de 17.000, pagos por 34.000 → debe 17.000 = 1 día.
+    const L = [
+      fila({ fecha: "2026-10-01", estado: "Pendiente", saldo: 17000, deudaAcumulada: 17000 }),
+      fila({ fecha: "2026-10-02", estado: "Pendiente", saldo: 34000, deudaAcumulada: 34000 }),
+      fila({
+        fecha: "2026-10-03",
+        estado: "Pendiente",
+        saldo: 17000,
+        deudaAcumulada: 17000,
+        totalPagado: 34000,
+      }),
+    ];
+    expect(summarize(L).diasPendientes).toBe(1);
+  });
+
   it("recaudoMes filtra por prefijo y suma totalPagado", () => {
     const L = [
       fila({ fecha: "2026-09-30", totalPagado: 17000 }),
