@@ -5,8 +5,10 @@ import { db } from "@/server/db";
 import { contracts, clients } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import { getLedger } from "@/server/db/ledger";
+import { ensureDays } from "@/server/db/ensure";
 import { LedgerTable } from "@/components/ledger-table";
-import { fmtCOP } from "@/lib/utils";
+import { fmtCOP, hoyBogota } from "@/lib/utils";
+import { contarDiasPendientes } from "@/lib/pendientes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,13 +28,18 @@ export default async function MiCuenta() {
   const cts = await db.select().from(contracts).where(eq(contracts.clientId, mine.id));
   const ct = cts.find((c) => c.activo === 1) ?? cts[0];
   if (!ct) return <div className="p-8">Sin contrato activo.</div>;
+  try {
+    ensureDays(ct.id, hoyBogota());
+  } catch {
+    // si falla, se calcula sobre los días que ya existan
+  }
   const ledger = await getLedger(ct.id);
   const reciente = [...ledger].reverse();
   const last = ledger[ledger.length - 1];
   const deuda = last?.deudaAcumulada ?? ct.saldoInicial ?? 0;
   const credito = last?.credito ?? 0;
   const saldoInicial = ct.saldoInicial ?? 0;
-  const diasPend = ledger.filter((r) => r.estado === "Pendiente").length;
+  const diasPend = contarDiasPendientes(ledger);
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4 w-full">

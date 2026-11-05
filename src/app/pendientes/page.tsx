@@ -4,7 +4,9 @@ import Link from "next/link";
 import { db } from "@/server/db";
 import { contracts, vehicles, clients } from "@/server/db/schema";
 import { getLedger } from "@/server/db/ledger";
-import { fmtCOP } from "@/lib/utils";
+import { ensureDays } from "@/server/db/ensure";
+import { fmtCOP, hoyBogota } from "@/lib/utils";
+import { contarDiasPendientes } from "@/lib/pendientes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +22,13 @@ export default async function Pendientes() {
   const clis = await db.select().from(clients);
 
   const rows: { placa: string; nombre: string; deuda: number; diasPend: number }[] = [];
+  const hoy = hoyBogota();
   for (const ct of cts.filter((c) => c.activo === 1)) {
+    try {
+      ensureDays(ct.id, hoy);
+    } catch {
+      // si falla, se calcula sobre los días que ya existan
+    }
     const ledger = await getLedger(ct.id);
     const last = ledger[ledger.length - 1];
     const deuda = last?.deudaAcumulada ?? 0;
@@ -31,7 +39,7 @@ export default async function Pendientes() {
         placa: v?.placa ?? "?",
         nombre: cli?.nombre ?? "?",
         deuda,
-        diasPend: ledger.filter((r) => r.estado === "Pendiente").length,
+        diasPend: contarDiasPendientes(ledger),
       });
     }
   }
